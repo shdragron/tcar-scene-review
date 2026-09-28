@@ -1,0 +1,1760 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>tcar sample viewer</title>
+<style>
+  :root {
+    --bg: #111317; --panel: #1a1d23; --line: #2a2f38; --text: #d8dde6; --muted: #8a93a3;
+    --accent: #4ea1ff; --warn: #ffb547; --bad: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header .grp { display: flex; gap: 6px; align-items: center; }
+  select, button, input[type=range] { font: inherit; color: var(--text); }
+  select, button { background: #242832; border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; }
+  button { cursor: pointer; min-width: 30px; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #0b1220; border-color: var(--accent); }
+  #slider { width: 260px; accent-color: var(--accent); }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  #info { padding: 6px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  #info b { color: var(--muted); font-weight: 500; margin-right: 4px; }
+  body { display: flex; flex-direction: column; height: 100vh; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
+  /* scene navigation: 전체 / 1단계 / 2단계 / 위험 / 분포 */
+  :root { --c-keep: #3987e5; --c-s1: #d95926; --c-s2: #199e70; --c-crit: #d03b3b; --c-warn: #fab219; }
+  #nav { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; min-height: 0; }
+  #navTabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
+  #navTabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px 2px; font-size: 13px; color: var(--muted);
+    border-bottom: 2px solid transparent; }
+  #navTabs button.on { color: var(--text); border-bottom-color: var(--accent); background: #20242c; }
+  #navTabs button .n { font-size: 11px; color: var(--muted); margin-left: 2px; }
+  #navHead { padding: 8px 10px 4px; font-size: 12px; color: var(--muted); flex: none; }
+  #navHead .row { margin-top: 4px; }
+  #navList { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 10px; font-size: 12px; }
+  #navList .sec { margin-top: 8px; padding: 0 2px 2px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
+  #navList .srow { display: grid; grid-template-columns: 16px 8px 34px minmax(0, 1fr) auto; gap: 2px 6px; align-items: center;
+    padding: 4px; border-radius: 4px; cursor: pointer; }
+  #navList .srow:hover, #navList .card:hover { background: #242832; }
+  #navList .cur { background: rgba(78,161,255,.14) !important; box-shadow: inset 0 0 0 1px var(--accent); }
+  #navList i.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  #navList .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  #navList input[type=checkbox] { margin: 0; }
+  #navList .card { border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; margin-top: 6px; cursor: pointer; }
+  #navList .card .hd { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #navList .card ol { margin: 5px 0 6px; padding-left: 16px; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+  #navList .card ol li:first-child { color: var(--text); }
+  #navList .card .acts { display: flex; gap: 6px; }
+  #navList .card .acts button { padding: 2px 8px; font-size: 12px; }
+  .pill { font-size: 11px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--line); color: var(--text); white-space: nowrap; }
+  .pill.weak { border-style: dashed; color: var(--muted); }
+  #navList .rnote { font-size: 11px; color: var(--muted); padding: 2px 8px 6px; line-height: 1.45; }
+  #navList .card .acts button.on { border-color: #4ea1ff; color: #4ea1ff; }
+  .risk-tag { color: var(--c-crit); font-size: 11px; white-space: nowrap; }
+  /* distribution view replaces the camera / LiDAR columns */
+  body.dist-mode #left, body.dist-mode #lidarPanel { display: none; }
+  #distView { grid-column: 2 / -1; min-height: 0; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  #distView h2 { margin: 0; font-size: 15px; }
+  .dleg { display: flex; gap: 14px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+  .dleg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  #distGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; margin-top: 10px; }
+  .chart { background: #15181d; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  .chart h4 { margin: 0 0 2px; font-size: 12.5px; font-weight: 600; }
+  .chart .sub { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart svg text { fill: #898781; font-size: 10px; font-family: system-ui, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .chart svg .hit { fill: transparent; cursor: pointer; }
+  .chart svg .hit:hover { fill: rgba(255,255,255,.05); }
+  #distTable { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+  #distTable th, #distTable td { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: right; white-space: nowrap; }
+  #distTable th:first-child, #distTable td:first-child, #distTable td.l { text-align: left; }
+  #distTable tr { cursor: pointer; } #distTable tbody tr:hover { background: #242832; }
+  #vizTip { position: fixed; z-index: 40; pointer-events: none; background: #1f2329; border: 1px solid #3a3f49; border-radius: 6px;
+    padding: 6px 8px; font-size: 12px; max-width: 320px; }
+  /* synchronized player */
+  #player { position: fixed; inset: 0; background: rgba(8,9,12,.97); z-index: 30; display: flex; flex-direction: column; gap: 8px;
+    padding: 12px 16px; overflow: auto; }
+  #plDetail { font-size: 12px; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.5; }
+  #plDetail li:first-child { color: var(--text); font-weight: 600; }
+  #plGrid { display: grid; gap: 8px; }
+  #plGrid figure { margin: 0; }
+  #plGrid figure img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+  #plGrid figcaption { position: static; border-radius: 0; background: #15181d; padding: 4px 8px; font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #plGrid figure.main { box-shadow: 0 0 0 2px var(--c-s1); }
+  #plSeek { flex: 1; min-width: 200px; accent-color: var(--accent); }
+  #plSpeedCv { width: 100%; height: 110px; flex: none; }
+  #plGrid canvas.plmap { display: block; width: 100%; height: 200px; background: #0b0d11; border-top: 1px solid var(--line); }
+  #plExtra button { padding: 1px 8px; font-size: 12px; }
+  #plGrid figure { border: 2px solid var(--tc); border-radius: 6px; overflow: hidden; background: #15181d; }
+  #plGrid .plhd { display: flex; gap: 8px; align-items: center; padding: 4px 8px; font-size: 13px;
+    background: color-mix(in srgb, var(--tc) 22%, #15181d); border-bottom: 2px solid var(--tc); }
+  #plGrid .plhd .num { font-size: 18px; font-weight: 700; color: var(--tc); }
+  #plGrid .plhd button { padding: 0 6px; font-size: 12px; } #plGrid .plhd button[data-go] { margin-left: auto; }
+  #plGrid .plimg { position: relative; }
+  #plGrid .plbadge { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,.7); border: 2px solid var(--tc); color: #fff;
+    padding: 0 8px; border-radius: 12px; font-size: 14px; font-weight: 600; }
+  #plGrid figcaption { font-size: 11px; padding: 3px 8px; }
+  #plBox { font-size: 12px; color: var(--muted); } #plBox summary { cursor: pointer; color: var(--text); }
+  #plBox ol { margin: 4px 0 0; padding-left: 18px; line-height: 1.45; font-size: 11.5px; }
+  #navList .card .sum { font-size: 11.5px; margin: 3px 0 2px; }
+  #navList .card details summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+  #navList .card details ol { font-size: 11px; }
+  #navTabs button { font-size: 11.5px; padding: 7px 0; white-space: nowrap; letter-spacing: -.02em; }
+  #navTabs button .n { font-size: 10px; margin-left: 1px; }
+  #left { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  #cams { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  figure { margin: 0; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; position: relative; }
+  #cams figure img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-in; }
+  #bottom { flex: 1; min-height: 280px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 6px; }
+  #routePanel { position: relative; background: #0b0d11; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  #route { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  #route:active { cursor: grabbing; }
+  #routeCtl { left: 8px; top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #routeLegend { left: 8px; bottom: 8px; font-size: 11px; display: flex; gap: 12px; flex-wrap: wrap; }
+  #routeLegend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  #routeTip { pointer-events: none; font-size: 12px; white-space: nowrap; }
+  #egoPanel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+  #egoPanel h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  #ego { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+  #ego dt { color: var(--muted); } #ego dd { margin: 0; text-align: right; }
+  #ego dd.warn { color: var(--warn); } #ego dd.bad { color: var(--bad); } #ego dd.ok { color: #4ade80; }
+  #speedCv { width: 100%; height: 110px; display: block; cursor: pointer; flex: none; }
+  .tabs { display: flex; gap: 4px; flex: none; }
+  .tabs button { flex: 1; padding: 3px 6px; font-size: 12px; }
+  .pane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .seg { display: flex; }
+  .seg label { flex: 1; text-align: center; padding: 4px 0; border: 1px solid var(--line); cursor: pointer; font-size: 12px; background: #242832; }
+  .seg label:first-child { border-radius: 5px 0 0 5px; } .seg label:last-child { border-radius: 0 5px 5px 0; }
+  .seg input { display: none; }
+  .seg label:has(input:checked) { background: var(--accent); color: #0b1220; border-color: var(--accent); }
+  .seg label.dup:has(input:checked) { background: var(--bad); border-color: var(--bad); }
+  .seg label.must:has(input:checked) { background: #4ade80; border-color: #4ade80; }
+  #dupOf { flex: 1; min-width: 0; }
+  #lblNote { width: 100%; min-height: 46px; resize: vertical; background: #242832; color: var(--text);
+    border: 1px solid var(--line); border-radius: 5px; font: inherit; padding: 4px 6px; }
+  .small { font-size: 11px; }
+  #selList { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+  #selList .it { display: flex; gap: 6px; align-items: center; padding: 2px 4px; border-radius: 4px; }
+  #selList .it:hover { background: #242832; }
+  #selList a { color: var(--text); cursor: pointer; text-decoration: underline dotted; }
+  #selList button { padding: 1px 6px; font-size: 11px; margin-left: auto; }
+  .badge { font-size: 10px; padding: 0 5px; border-radius: 8px; background: #3a2f16; color: var(--warn); }
+  .st-remove { color: var(--bad); } .st-must_keep { color: #4ade80; } .st-keep { color: var(--text); }
+  #cmp { position: fixed; inset: 0; background: rgba(8,9,12,.96); z-index: 20; display: flex; flex-direction: column;
+    gap: 8px; padding: 14px 18px; overflow: auto; }
+  #cmp .row b { font-size: 14px; }
+  #cmpGrid { display: grid; grid-template-columns: 150px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
+  #cmpGrid .hd { color: var(--muted); text-align: center; font-size: 12px; }
+  #cmpGrid .lab { font-size: 12px; line-height: 1.5; }
+  #cmpGrid img, #cmpGrid canvas { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: 4px; display: block; }
+  #cmpGrid canvas { aspect-ratio: 1; }
+  #cmpSpeed { width: 100%; height: 130px; flex: none; }
+  #cmpInfo { font-size: 12px; }
+  @media (max-width: 1100px) {
+    body { height: auto; }
+    main { grid-template-columns: minmax(0, 1fr); }
+    #nav { max-height: 360px; }
+    #distView { grid-column: auto; }
+    #bottom { flex: none; height: 460px; }
+  }
+  @media (max-width: 640px) { #bottom { grid-template-columns: minmax(0, 1fr); height: auto; } #routePanel { height: 360px; } }
+  figcaption { position: absolute; left: 0; top: 0; padding: 2px 7px; background: rgba(0,0,0,.6);
+    border-bottom-right-radius: 6px; font-size: 12px; }
+  figcaption .dt.warn { color: var(--warn); } figcaption .dt.bad { color: var(--bad); }
+  #lidarPanel { position: relative; min-height: 420px; background: #07080a; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  #lidar { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  #lidar:active { cursor: grabbing; }
+  .overlay { position: absolute; background: rgba(17,19,23,.82); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  #lidarCtl { left: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: calc(100% - 210px); }
+  #lidarStat { left: 8px; bottom: 8px; font-size: 12px; }
+  #help { right: 8px; bottom: 8px; font-size: 11px; color: var(--muted); }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; z-index: 10; cursor: zoom-out; }
+  #zoom img { max-width: 96vw; max-height: 90vh; }
+  [hidden] { display: none !important; }
+  #loading { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <div class="grp">
+    <select id="sceneSel" title="scene (↑/↓)"></select>
+  </div>
+  <div class="grp">
+    <button id="prev" title="이전 sample (←)">◀</button>
+    <input id="slider" type="range" min="0" max="0" value="0">
+    <button id="next" title="다음 sample (→)">▶</button>
+    <span id="idx" class="mono"></span>
+  </div>
+  <div class="grp">
+    <button id="play" title="재생 (Space)">▶ 재생</button>
+    <select id="speed" title="재생 속도"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+    <label class="muted"><input type="checkbox" id="autoNext"> 다음 scene 이어서</label>
+  </div>
+  <span id="loading" hidden>loading…</span>
+</header>
+<div id="info" class="mono"></div>
+<main>
+  <nav id="nav">
+    <div id="navTabs">
+      <button data-nav="all" class="on" title="모든 scene (route별)">전체</button>
+      <button data-nav="s1" title="1단계 중복 삭제: 같은 route 안 같은 장소·같은 상태, 남긴 대표가 주변 사건까지 대신할 때만">중복</button>
+      <button data-nav="s2" title="2단계 수량 조정 삭제: 누적 데이터 대비 많이 쌓인 상황 그룹을 덜어냄 (중복 아님)">수량</button>
+      <button data-nav="rev" title="사람 판단이 필요한 것: 1단계 불확실한 쌍, 2단계 충돌">검토</button>
+      <button data-nav="risk" title="위험 이벤트가 있는 scene (자동 삭제하지 않음)">위험</button>
+      <button data-nav="dist" title="전체 변수 분포 (전체 vs 유지)">분포</button>
+    </div>
+    <div id="navHead"></div>
+    <div id="navList"></div>
+  </nav>
+  <section id="left">
+    <div id="cams"></div>
+    <div id="bottom">
+      <div id="routePanel">
+        <canvas id="route"></canvas>
+        <div id="routeCtl" class="overlay">
+          <button id="fitAll" title="전체 경로 보기">전체</button>
+          <button id="fitScene" title="선택 scene에 맞춤">scene</button>
+          <label class="muted"><input type="checkbox" id="follow"> 따라가기</label>
+          <label class="muted" title="scene_select.py 결과를 지도에 색으로 표시"><input type="checkbox" id="selOverlay"> 선택 결과</label>
+        </div>
+        <div id="routeLegend" class="overlay">
+          <span><i style="background:#7c8494"></i>같은 로그</span>
+          <span><i style="background:#454b57"></i>다른 로그</span>
+          <span><i style="background:#4ea1ff;height:4px"></i>선택 scene</span>
+          <span><i style="background:#ffb547;width:8px;height:8px;border-radius:50%"></i>현재 sample</span>
+          <span class="ovl" hidden><i style="background:var(--c-s1)"></i>삭제 1단계</span>
+          <span class="ovl" hidden><i style="background:var(--c-s2)"></i>삭제 2단계</span>
+        </div>
+        <div id="routeTip" class="overlay mono" hidden></div>
+      </div>
+      <div id="egoPanel">
+        <div class="tabs" id="sideTabs">
+          <button data-tab="ego" class="on">EGO</button>
+          <button data-tab="lbl">중복 라벨</button>
+          <button data-tab="sel">선택 결과</button>
+        </div>
+        <div class="pane" data-pane="ego">
+          <h3>EGO STATUS <span class="muted" style="font-weight:400">(INS, LiDAR 시각)</span></h3>
+          <dl id="ego" class="mono"></dl>
+          <h3>속도 <span class="muted" style="font-weight:400">(scene 20 s, 클릭 이동)</span></h3>
+          <canvas id="speedCv"></canvas>
+        </div>
+        <div class="pane" data-pane="lbl" hidden>
+          <h3>사람 판단 <span class="muted mono" id="lblScene" style="font-weight:400"></span></h3>
+          <div class="seg">
+            <label><input type="radio" name="lbl" value="keep">유지</label>
+            <label class="must"><input type="radio" name="lbl" value="must_keep">필수 유지</label>
+            <label class="dup"><input type="radio" name="lbl" value="duplicate">중복</label>
+          </div>
+          <div class="row" id="dupRow">
+            <span class="muted small">대신할 scene</span>
+            <select id="dupOf"></select>
+          </div>
+          <div class="row">
+            <button id="lblCmp" title="현재 scene과 대체 후보를 2·6·10·14·18 s에서 나란히 비교">비교 보기</button>
+            <button id="lblClear" title="이 scene의 라벨 삭제">지우기</button>
+            <button id="lblNext" title="라벨이 없는 다음 scene으로">다음 미라벨 ▶</button>
+          </div>
+          <textarea id="lblNote" placeholder="메모 (판단 근거 등)"></textarea>
+          <div class="muted small" id="lblStatus"></div>
+          <div class="muted small">선택 결과를 보기 전에 라벨을 먼저 다는 걸 권장합니다(판단이 결과에 끌리지 않도록).</div>
+        </div>
+        <div class="pane" data-pane="sel" hidden>
+          <div class="row"><h3 style="flex:1">SCENE SELECTION</h3><button id="selReload" class="small" title="result.json 다시 읽기">다시 읽기</button></div>
+          <div id="selSummary" class="small"></div>
+          <div id="selAgree" class="small"></div>
+          <div id="selList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="lidarPanel">
+    <canvas id="lidar"></canvas>
+    <div id="lidarCtl" class="overlay">
+      <button id="vBev" class="on" title="B">BEV</button>
+      <button id="v3d" title="3">3D</button>
+      <select id="colorBy" title="색상 기준">
+        <option value="height">색: 높이</option>
+        <option value="intensity">색: intensity</option>
+        <option value="ring">색: ring</option>
+        <option value="range">색: 거리</option>
+      </select>
+      <select id="ptSize" title="점 크기"><option value="1">1px</option><option value="2" selected>2px</option><option value="3">3px</option></select>
+      <select id="maxRange" title="표시 최대 거리">
+        <option value="40">≤40 m</option><option value="80">≤80 m</option><option value="1000" selected>전체</option>
+      </select>
+      <label class="muted"><input type="checkbox" id="grid" checked> grid</label>
+    </div>
+    <div id="lidarStat" class="overlay mono"></div>
+    <div id="help" class="overlay">드래그 회전 · 우클릭/Shift 드래그 이동 · 휠 줌 · 더블클릭 리셋</div>
+  </section>
+  <section id="distView" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>전체 변수 분포 <span class="muted" style="font-weight:400;font-size:12px">scene 단위 · 막대 = 해당 구간의 scene 수</span></h2>
+      <div class="row">
+        <div class="dleg"><span><i style="background:var(--c-keep)"></i>유지</span><span><i style="background:var(--c-s1)"></i>삭제 · 중복</span>
+          <span><i style="background:var(--c-s2)"></i>삭제 2단계</span></div>
+        <button id="distMode">표로 보기</button>
+      </div>
+    </div>
+    <div id="distSummary" class="small muted" style="margin-top:4px"></div>
+    <div id="distGrid"></div>
+    <div id="distTableWrap" hidden style="overflow-x:auto"><table id="distTable"></table></div>
+  </section>
+</main>
+<div id="vizTip" hidden></div>
+<div id="player" hidden>
+  <div class="row">
+    <b id="plTitle">동시 재생</b>
+    <button id="plPlay">▶ 재생</button>
+    <input type="range" id="plSeek" min="0" max="20" step="0.05" value="0">
+    <span id="plTime" class="mono">0.0 s</span>
+    <select id="plCam" title="카메라"></select>
+    <select id="plRate" title="재생 속도"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+    <select id="plFps" title="화면 갱신"><option value="5">5 fps</option><option value="10" selected>10 fps</option><option value="15">15 fps</option></select>
+    <button id="plClose">닫기 (Esc)</button>
+  </div>
+  <details id="plBox"><summary id="plSum"></summary><ol id="plDetail"></ol></details>
+  <div id="plExtra" class="row small muted"></div>
+  <div id="plGrid"></div>
+  <canvas id="plSpeedCv"></canvas>
+</div>
+<div id="zoom" hidden><img alt=""><div class="mono" id="zoomCap"></div></div>
+<div id="cmp" hidden>
+  <div class="row">
+    <b>scene 비교</b>
+    <span class="muted">A</span><select id="cmpA"></select>
+    <span class="muted">B</span><select id="cmpB"></select>
+    <select id="cmpCam" title="표시할 센서"></select>
+    <button id="cmpGoA">A로 이동</button><button id="cmpGoB">B로 이동</button>
+    <span class="muted" style="margin-left:12px" title="사람 판단: selection/pair_labels.json 에 저장, curate.py 가 알고리즘 판단과 비교">같은 상황?</span>
+    <button id="pairSame">같음</button><button id="pairDiff">다름</button>
+    <span id="pairState" class="muted small"></span>
+    <button id="cmpClose" style="margin-left:auto">닫기 (Esc)</button>
+  </div>
+  <div id="cmpInfo" class="mono"></div>
+  <div id="cmpGrid"></div>
+  <div class="muted small">속도 (A 파랑, B 주황)</div>
+  <canvas id="cmpSpeed"></canvas>
+</div>
+
+<script>
+const CAMS = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'];
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+let scenes = [], sceneIdx = 0, sampleIdx = 0, cur = null, reqId = 0, playing = false;
+let centroids = [], labels = {}, selection = null;   // scene centres (local m), human labels, scene_select result
+const shortLog = l => l.split('_')[0];
+const sceneIndex = name => scenes.findIndex(s => s.name === name);
+const overlayOn = () => $('selOverlay').checked && selection && !selection.missing;
+const STATUS_KO = { keep: '유지', remove: '제거', must_keep: '필수 유지' };
+const cache = new Map();   // url -> Promise (LRU-ish)
+function cached(url, kind) {
+  if (cache.has(url)) { const p = cache.get(url); cache.delete(url); cache.set(url, p); return p; }
+  const p = fetch(url).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return kind === 'json' ? r.json() : r.arrayBuffer(); });
+  p.catch(() => cache.delete(url));
+  cache.set(url, p);
+  while (cache.size > 24) cache.delete(cache.keys().next().value);
+  return p;
+}
+
+// ---------- camera tiles ----------
+const tiles = {};
+for (const ch of CAMS) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = `<img alt="${ch}"><figcaption class="mono">${ch} <span class="dt"></span></figcaption>`;
+  fig.querySelector('img').onclick = () => {
+    const c = cur && cur.channels[ch]; if (!c) return;
+    $('zoom').querySelector('img').src = '/data/' + c.filename;
+    $('zoomCap').textContent = `${ch}  ${c.filename}  dt ${fmtDt(c.dt_ms)} ms`;
+    $('zoom').hidden = false;
+  };
+  $('cams').appendChild(fig);
+  tiles[ch] = { fig, img: fig.querySelector('img'), dt: fig.querySelector('.dt') };
+}
+$('zoom').onclick = () => { $('zoom').hidden = true; };
+const fmtDt = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+
+// ---------- navigation ----------
+async function init() {
+  ({ scenes } = await (await fetch('/api/scenes')).json());
+  $('sceneSel').innerHTML = scenes.map((s, i) =>
+    `<option value="${i}">${s.name} · ${s.log} (${s.samples.length})</option>`).join('');
+  centroids = scenes.map(s => s.route.length
+    ? [s.route.reduce((a, p) => a + p[0], 0) / s.route.length, s.route.reduce((a, p) => a + p[1], 0) / s.route.length] : null);
+  await Promise.all([loadLabels(), loadRisk()]);
+  await loadSelection();
+  const h = new URLSearchParams(location.hash.slice(1));
+  const si = scenes.findIndex(s => s.name === h.get('scene'));
+  if (h.get('view') === '3d') setView('3d');
+  let tab = h.get('tab');
+  try { tab = tab || localStorage.getItem('viewer.tab'); } catch (e) {}
+  if (tab) showTab(tab);
+  if (h.get('ovl')) { $('selOverlay').checked = true; syncOverlayLegend(); }
+  await go(si >= 0 ? si : 0, +h.get('i') || 0);
+  let nv = h.get('nav');                       // e.g. #nav=s2  /  #nav=s1&play=scene-0026  /  #nav=dist
+  try { nv = nv || localStorage.getItem('viewer.nav'); } catch (e) {}
+  setNav(['all', 's1', 's2', 'rev', 'risk', 'dist'].includes(nv) ? nv : 'all');
+  if (h.get('play') && sceneIndex(h.get('play')) >= 0) {
+    selOf(h.get('play')).review ? playReview(h.get('play')) : playDeletion(h.get('play'), false);
+    if (h.get('pt')) { PL.t = +h.get('pt'); plShow(PL.t); }
+  }
+  if (h.get('cmp')) {   // e.g. #scene=scene-0025&cmp=scene-0025,scene-0026&cam=LIDAR_TOP
+    const [a, b] = h.get('cmp').split(',');
+    openCompare(a, b);
+    if (h.get('cam')) { $('cmpCam').value = h.get('cam'); renderCompare(); }
+  }
+}
+
+async function go(si, i) {
+  flushLabelSave();   // a pending note edit belongs to the scene we are leaving
+  si = Math.max(0, Math.min(scenes.length - 1, si));
+  const sc = scenes[si];
+  i = Math.max(0, Math.min(sc.samples.length - 1, i));
+  const sceneChanged = si !== sceneIdx || !cur;
+  sceneIdx = si; sampleIdx = i;
+  $('sceneSel').value = si;
+  $('slider').max = sc.samples.length - 1; $('slider').value = i;
+  $('idx').textContent = `${i + 1} / ${sc.samples.length}`;
+  history.replaceState(null, '', `#scene=${sc.name}&i=${i}`);
+  drawRoute(); drawSpeed();
+  if (sceneChanged) { renderLabel(); renderSelection(); } renderNav();
+
+  const my = ++reqId;
+  $('loading').hidden = false;
+  try {
+    const s = await cached('/api/sample/' + sc.samples[i], 'json');
+    if (my !== reqId) return;
+    cur = s;
+    const imgLoads = [];
+    for (const ch of CAMS) {
+      const c = s.channels[ch], t = tiles[ch];
+      if (!c) { t.img.removeAttribute('src'); t.dt.textContent = '(없음)'; continue; }
+      t.img.src = '/data/' + c.filename;
+      imgLoads.push(t.img.decode().catch(() => {}));
+      t.dt.textContent = `${fmtDt(c.dt_ms)} ms`;
+      const a = Math.abs(c.dt_ms);
+      t.dt.className = 'dt' + (a > 30 ? ' bad' : a > 15 ? ' warn' : '');
+    }
+    const lid = s.channels.LIDAR_TOP;
+    const t0 = performance.now();
+    const buf = lid ? await cached('/data/' + lid.filename, 'bin') : null;
+    if (my !== reqId) return;
+    setPoints(buf, performance.now() - t0);
+    updateInfo(s);
+    if (sceneChanged && $('follow').checked) fitScene();
+    drawRoute(); drawSpeed();
+    await Promise.all(imgLoads);
+    prefetch(sc, i + 1);
+  } catch (e) {
+    console.error(e);
+    $('lidarStat').textContent = '로드 실패: ' + e.message;
+  } finally {
+    if (my === reqId) $('loading').hidden = true;
+  }
+}
+
+async function prefetch(sc, i) {
+  if (i >= sc.samples.length) return;
+  try {
+    const s = await cached('/api/sample/' + sc.samples[i], 'json');
+    for (const ch of CAMS) if (s.channels[ch]) new Image().src = '/data/' + s.channels[ch].filename;
+    if (s.channels.LIDAR_TOP) cached('/data/' + s.channels.LIDAR_TOP.filename, 'bin');
+  } catch (e) {}
+}
+
+function updateInfo(s) {
+  const sc = scenes[sceneIdx], d = new Date(s.timestamp / 1000);
+  const parts = [
+    ['log', sc.log], ['desc', sc.description],
+    ['time', d.toLocaleString('ko-KR', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')],
+    ['sample', s.token],
+  ];
+  $('info').innerHTML = parts.map(([k, v]) => `<span><b>${k}</b>${v}</span>`).join('');
+  updateEgo(s.ego_status);
+}
+
+// ---------- ego status ----------
+const INS_STATUS = { 0: 'INACTIVE', 1: 'ALIGNING', 2: 'HIGH_VARIANCE', 3: 'SOLUTION_GOOD', 6: 'SOLUTION_FREE',
+  7: 'ALIGN_COMPLETE', 8: 'DETERMINING_ORIENT', 9: 'WAITING_INITIALPOS', 10: 'WAITING_AZIMUTH',
+  11: 'INIT_BIASES', 12: 'MOTION_DETECT' };
+function updateEgo(e) {
+  if (!e) { $('ego').innerHTML = '<dt>can_bus</dt><dd class="bad">없음</dd>'; return; }
+  const bearing = ((90 - e.yaw_deg) % 360 + 360) % 360;
+  const err = e.ego_pose_err_m;
+  const rows = [
+    ['속도', `${e.speed_kmh.toFixed(1)} km/h`],
+    ['가속 종/횡', `${e.ax.toFixed(2)} / ${e.ay.toFixed(2)} m/s²`],
+    ['yaw rate', `${e.wz_dps.toFixed(2)} °/s`],
+    ['방위(북=0)', `${bearing.toFixed(1)}°`],
+    ['lat', e.lat.toFixed(7)], ['lon', e.lon.toFixed(7)], ['height', `${e.height.toFixed(2)} m`],
+    ['UTM52N', `${e.utm[0].toFixed(1)}, ${e.utm[1].toFixed(1)}`],
+    ['INS', `${e.ins_status} ${INS_STATUS[e.ins_status] || ''}`, e.ins_status === 3 ? 'ok' : 'warn'],
+    ['INS−LiDAR', `${fmtDt(e.dt_ms)} ms`],
+    ['ego_pose 오차', err == null ? '–' : `${err.toFixed(2)} m`, err == null ? '' : err > 0.5 ? 'bad' : err > 0.1 ? 'warn' : 'ok'],
+  ];
+  $('ego').innerHTML = rows.map(([k, v, c]) => `<dt>${k}</dt><dd class="${c || ''}">${v}</dd>`).join('');
+  $('ego').title = 'ego_pose 오차: sample_data의 ego_pose 위치와 INS(inspva) 위치 차이. 크면 ego_pose가 1Hz로 멈춘 구간.';
+}
+
+// ---------- route map (all scenes gray, selected scene blue) ----------
+const rcv = $('route'), rctx = rcv.getContext('2d');
+const rview = { cx: 0, cy: 0, s: 1, init: false };   // s: device px per metre
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(1, Math.round(c.clientWidth * dpr)), H = Math.max(1, Math.round(c.clientHeight * dpr));
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  return dpr;
+}
+function bounds(list) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const sc of list) for (const [x, y] of sc.route) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return [x0, x1, y0, y1];
+}
+function fitTo([x0, x1, y0, y1], minSpan) {
+  sizeCanvas(rcv);
+  const w = Math.max(x1 - x0, minSpan), h = Math.max(y1 - y0, minSpan);
+  rview.cx = (x0 + x1) / 2; rview.cy = (y0 + y1) / 2;
+  rview.s = Math.min(rcv.width / (w * 1.15), rcv.height / (h * 1.25));
+  rview.init = true; drawRoute();
+}
+const fitAll = () => fitTo(bounds(scenes.filter(s => s.route.length)), 50);
+const fitScene = () => { const sc = scenes[sceneIdx]; if (sc.route.length) fitTo(bounds([sc]), 80); };
+const toScreen = (x, y) => [rcv.width / 2 + (x - rview.cx) * rview.s, rcv.height / 2 - (y - rview.cy) * rview.s];
+const toWorld = (u, v) => [rview.cx + (u - rcv.width / 2) / rview.s, rview.cy - (v - rcv.height / 2) / rview.s];
+
+function nearestIdxByTime(arr, t, get) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (get(arr[m]) < t) lo = m + 1; else hi = m; }
+  if (lo > 0 && Math.abs(get(arr[lo - 1]) - t) < Math.abs(get(arr[lo]) - t)) lo--;
+  return lo;
+}
+function curPose() {
+  const sc = scenes[sceneIdx], e = cur && cur.ego_status;
+  if (e && cur.token === sc.samples[sampleIdx]) return { x: e.x, y: e.y, yaw: e.yaw_deg * Math.PI / 180 };
+  if (!sc.route.length) return null;
+  const k = nearestIdxByTime(sc.route, sc.sample_ts[sampleIdx], p => p[2]), p = sc.route[k], q = sc.route[Math.min(k + 1, sc.route.length - 1)];
+  return { x: p[0], y: p[1], yaw: Math.atan2(q[1] - p[1], q[0] - p[0]) };
+}
+
+function drawRoute() {
+  if (!scenes.length) return;
+  const dpr = sizeCanvas(rcv);
+  if (!rview.init) { fitAll(); return; }
+  const c = rctx, W = rcv.width, H = rcv.height, sel = scenes[sceneIdx];
+  if ($('follow').checked) { const p = curPose(); if (p) { rview.cx = p.x; rview.cy = p.y; } }
+  c.fillStyle = '#0b0d11'; c.fillRect(0, 0, W, H);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const line = (sc, color, w) => {
+    if (!sc.route.length) return;
+    c.strokeStyle = color; c.lineWidth = w * dpr; c.beginPath();
+    sc.route.forEach(([x, y], i) => { const [u, v] = toScreen(x, y); i ? c.lineTo(u, v) : c.moveTo(u, v); });
+    // a stationary scene collapses to a point: draw it as a round dot
+    const [u, v] = toScreen(sc.route[0][0], sc.route[0][1]); c.moveTo(u, v); c.lineTo(u + 0.01, v);
+    c.stroke();
+  };
+  // with the selection overlay on: removed scenes get a halo underneath (stage 1 red, stage 2 orange)
+  const ov = overlayOn(), stOf = sc => ov ? (selection.scenes[sc.name] || {}).status : null;
+  const halo = sc => (selection.scenes[sc.name] || {}).stage === 2 ? '#199e70' : '#d95926';
+  if (ov) for (const sc of scenes) if (sc !== sel && stOf(sc) === 'remove') line(sc, halo(sc), 8);
+  const col = (sc, base) => stOf(sc) === 'must_keep' ? '#4ade80' : stOf(sc) === 'remove' ? '#f3d9d9' : base;
+  for (const sc of scenes) if (sc !== sel && sc.log !== sel.log) line(sc, col(sc, '#454b57'), 2);
+  for (const sc of scenes) if (sc !== sel && sc.log === sel.log) line(sc, col(sc, '#7c8494'), 2.5);
+  if (ov && stOf(sel) === 'remove') line(sel, halo(sel), 12);
+  line(sel, 'rgba(78,161,255,.35)', 9);
+  line(sel, '#4ea1ff', 4);
+  // key-frame ticks on the selected scene
+  c.fillStyle = '#cfe4ff';
+  if (sel.route.length) for (const t of sel.sample_ts) {
+    const p = sel.route[nearestIdxByTime(sel.route, t, q => q[2])], [u, v] = toScreen(p[0], p[1]);
+    c.fillRect(u - dpr, v - dpr, 2 * dpr, 2 * dpr);
+  }
+  // scene start marker + name
+  if (sel.route.length) {
+    const [u, v] = toScreen(sel.route[0][0], sel.route[0][1]);
+    c.fillStyle = '#fff'; c.fillRect(u - 3.5 * dpr, v - 3.5 * dpr, 7 * dpr, 7 * dpr);
+    c.font = `${12 * dpr}px system-ui`;
+    const tw = c.measureText(sel.name).width, lx = u + 10 * dpr, ly = v - 12 * dpr;
+    c.fillStyle = 'rgba(11,13,17,.85)'; c.fillRect(lx - 4 * dpr, ly - 12 * dpr, tw + 8 * dpr, 17 * dpr);
+    c.fillStyle = '#cfe4ff'; c.fillText(sel.name, lx, ly);
+  }
+  // current position + heading
+  const p = curPose();
+  if (p) {
+    const [u, v] = toScreen(p.x, p.y), L = 18 * dpr;
+    c.strokeStyle = '#ffb547'; c.lineWidth = 3 * dpr; c.beginPath();
+    c.moveTo(u, v); c.lineTo(u + Math.cos(p.yaw) * L, v - Math.sin(p.yaw) * L); c.stroke();
+    c.fillStyle = '#ffb547'; c.beginPath(); c.arc(u, v, 6 * dpr, 0, 7); c.fill();
+    c.strokeStyle = '#0b0d11'; c.lineWidth = 2 * dpr; c.stroke();
+  }
+  // north label + scale bar
+  c.fillStyle = '#8a93a3'; c.font = `${11 * dpr}px system-ui`; c.textAlign = 'center';
+  c.fillText('N ↑ (UTM)', W - 40 * dpr, 22 * dpr);
+  const target = 110 * dpr / rview.s, pow = 10 ** Math.floor(Math.log10(target));
+  const len = [1, 2, 5, 10].map(k => k * pow).filter(v => v <= target).pop();
+  const x1 = W - 16 * dpr, x0 = x1 - len * rview.s, y = H - 16 * dpr;
+  c.strokeStyle = '#8a93a3'; c.lineWidth = 2 * dpr; c.beginPath(); c.moveTo(x0, y - 5 * dpr); c.lineTo(x0, y); c.lineTo(x1, y); c.lineTo(x1, y - 5 * dpr); c.stroke();
+  c.fillText(len >= 1000 ? `${len / 1000} km` : `${len} m`, (x0 + x1) / 2, y - 7 * dpr);
+  c.textAlign = 'start';
+}
+
+function hitRoute(ev) {
+  const dpr = window.devicePixelRatio || 1, r = rcv.getBoundingClientRect();
+  const u = (ev.clientX - r.left) * dpr, v = (ev.clientY - r.top) * dpr;
+  const lim = (12 * dpr) ** 2, hits = [];
+  scenes.forEach((sc, si) => {
+    let bd = Infinity, bp = null;
+    for (const p of sc.route) {
+      const [a, b] = toScreen(p[0], p[1]), d = (a - u) ** 2 + (b - v) ** 2;
+      if (d < bd) { bd = d; bp = p; }
+    }
+    if (bd < lim) hits.push({ si, p: bp, d: si === sceneIdx ? bd * 0.5 : bd });   // prefer the selected scene
+  });
+  if (!hits.length) return null;
+  hits.sort((a, b) => a.d - b.d);
+  // stationary scenes at one stop collapse onto the same point: report all of them
+  return { ...hits[0], others: hits.slice(1).filter(h => h.d - hits[0].d < (3 * dpr) ** 2).map(h => scenes[h.si].name) };
+}
+let rdrag = null;
+rcv.addEventListener('pointerdown', e => { rcv.setPointerCapture(e.pointerId); rdrag = { x: e.clientX, y: e.clientY, moved: 0 }; });
+rcv.addEventListener('pointerup', e => {
+  if (rdrag && rdrag.moved < 4) {
+    const h = hitRoute(e);
+    if (h) { const sc = scenes[h.si]; go(h.si, nearestIdxByTime(sc.sample_ts, h.p[2], t => t)); }
+  }
+  rdrag = null;
+});
+rcv.addEventListener('pointermove', e => {
+  const dpr = window.devicePixelRatio || 1;
+  if (rdrag) {
+    const dx = e.clientX - rdrag.x, dy = e.clientY - rdrag.y; rdrag.x = e.clientX; rdrag.y = e.clientY;
+    rdrag.moved += Math.abs(dx) + Math.abs(dy);
+    if (rdrag.moved >= 4) { $('follow').checked = false; rview.cx -= dx * dpr / rview.s; rview.cy += dy * dpr / rview.s; drawRoute(); }
+    $('routeTip').hidden = true; return;
+  }
+  const h = hitRoute(e), tip = $('routeTip');
+  if (!h) { tip.hidden = true; rcv.style.cursor = ''; return; }
+  const sc = scenes[h.si], r = rcv.getBoundingClientRect();
+  const ss_ = overlayOn() && selection.scenes[sc.name];
+  const st = ss_ ? ` · ${STATUS_KO[ss_.status]}${ss_.stage ? ` ${ss_.stage}단계` : ''}${ss_.group ? ` · ${ss_.group}` : ''}` : '';
+  tip.textContent = `${sc.name} · ${shortLog(sc.log)} · +${((h.p[2] - sc.route[0][2]) / 1e6).toFixed(1)} s · ${h.p[3].toFixed(0)} km/h${st}`
+    + (h.others.length ? ` · 같은 지점: ${h.others.map(n => n.slice(-4)).join(', ')}` : '');
+  tip.style.left = Math.max(4, Math.min(e.clientX - r.left + 12, r.width - 420)) + 'px'; tip.style.top = (e.clientY - r.top + 12) + 'px';
+  tip.hidden = false; rcv.style.cursor = 'pointer';
+});
+rcv.addEventListener('pointerleave', () => { $('routeTip').hidden = true; });
+rcv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const dpr = window.devicePixelRatio || 1, r = rcv.getBoundingClientRect();
+  const u = (e.clientX - r.left) * dpr, v = (e.clientY - r.top) * dpr, [wx, wy] = toWorld(u, v);
+  rview.s = Math.max(0.005, Math.min(80, rview.s * Math.exp(-e.deltaY * 0.0015)));
+  if (!$('follow').checked) { rview.cx = wx - (u - rcv.width / 2) / rview.s; rview.cy = wy + (v - rcv.height / 2) / rview.s; }
+  drawRoute();
+}, { passive: false });
+$('fitAll').onclick = () => { $('follow').checked = false; fitAll(); };
+$('fitScene').onclick = () => { $('follow').checked = false; fitScene(); };
+$('follow').onchange = drawRoute;
+new ResizeObserver(() => { drawRoute(); drawSpeed(); }).observe($('bottom'));
+
+// ---------- speed profile of the selected scene ----------
+const scv = $('speedCv'), sctx = scv.getContext('2d');
+function speedGeom() {
+  const sc = scenes[sceneIdx], r = sc.route, dpr = window.devicePixelRatio || 1;
+  const t0 = r.length ? r[0][2] : sc.sample_ts[0], t1 = r.length ? r[r.length - 1][2] : sc.sample_ts.at(-1);
+  const vmax = Math.max(20, Math.ceil(Math.max(0, ...r.map(p => p[3])) / 10) * 10);
+  const L = 30 * dpr, R = 6 * dpr, T = 6 * dpr, B = 16 * dpr;
+  return { sc, r, dpr, t0, t1, vmax, L, R, T, B,
+    X: t => L + (t - t0) / Math.max(1, t1 - t0) * (scv.width - L - R), Y: v => scv.height - B - v / vmax * (scv.height - T - B) };
+}
+function drawSpeed() {
+  if (!scenes.length) return;
+  sizeCanvas(scv);
+  const g = speedGeom(), c = sctx, W = scv.width, H = scv.height, dpr = g.dpr;
+  c.clearRect(0, 0, W, H);
+  c.font = `${10 * dpr}px system-ui`; c.fillStyle = '#8a93a3'; c.strokeStyle = '#2a2f38'; c.lineWidth = dpr;
+  for (let v = 0; v <= g.vmax; v += g.vmax > 40 ? 20 : 10) {
+    const y = g.Y(v); c.beginPath(); c.moveTo(g.L, y); c.lineTo(W - g.R, y); c.stroke(); c.fillText(String(v), 4 * dpr, y + 3 * dpr);
+  }
+  for (let s = 0; s <= 20; s += 5) { const x = g.X(g.t0 + s * 1e6); c.fillText(s + 's', x - 6 * dpr, H - 3 * dpr); }
+  if (g.r.length) {
+    c.strokeStyle = '#4ea1ff'; c.lineWidth = 2 * dpr; c.beginPath();
+    g.r.forEach((p, i) => { const x = g.X(p[2]), y = g.Y(p[3]); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+  }
+  const x = g.X(g.sc.sample_ts[sampleIdx]);
+  c.strokeStyle = '#ffb547'; c.lineWidth = 2 * dpr; c.beginPath(); c.moveTo(x, g.T); c.lineTo(x, H - g.B); c.stroke();
+}
+scv.addEventListener('click', e => {
+  const g = speedGeom(), r = scv.getBoundingClientRect(), x = (e.clientX - r.left) * g.dpr;
+  const t = g.t0 + (x - g.L) / (scv.width - g.L - g.R) * (g.t1 - g.t0);
+  go(sceneIdx, nearestIdxByTime(g.sc.sample_ts, t, v => v));
+});
+
+// ---------- lidar renderer ----------
+const cv = $('lidar'), ctx = cv.getContext('2d');
+let pts = null, n = 0, colors = null, groundZ = -1.8, maxRing = 127;
+const view = { yaw: Math.PI, pitch: Math.PI / 2 - 1e-4, dist: 90, tx: 15, ty: 0, tz: 0, ortho: true, fov: 50 * Math.PI / 180 };
+const LUT = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {   // turbo colormap (polynomial approximation)
+  const t = i / 255, cl = v => Math.max(0, Math.min(255, Math.round(v)));
+  const r = cl(34.61 + t * (1172.33 - t * (10793.56 - t * (33300.12 - t * (38394.49 - t * 14825.05)))));
+  const g = cl(23.31 + t * (557.33 + t * (1225.33 - t * (3574.96 - t * (1073.77 + t * 707.56)))));
+  const b = cl(27.2 + t * (3211.1 - t * (15327.97 - t * (27814 - t * (22569.18 - t * 6838.66)))));
+  LUT[i] = (255 << 24) | (b << 16) | (g << 8) | r;
+}
+
+function setPoints(buf, ms) {
+  if (!buf) { pts = null; n = 0; schedule(); return; }
+  pts = new Float32Array(buf); n = Math.floor(pts.length / 5);
+  // ground ≈ 10th percentile of z within 25 m (sensor frame; calib is identity so this is ego frame too)
+  const zs = [];
+  maxRing = 1;
+  for (let i = 0; i < n; i++) {
+    const o = i * 5, x = pts[o], y = pts[o + 1];
+    if (pts[o + 4] > maxRing) maxRing = pts[o + 4];
+    if (i % 7 === 0 && x * x + y * y < 625) zs.push(pts[o + 2]);
+  }
+  zs.sort((a, b) => a - b);
+  groundZ = zs.length ? zs[Math.floor(zs.length * 0.1)] : -1.8;
+  computeColors();
+  $('lidarStat').innerHTML = `${n.toLocaleString()} pts · ground z≈${groundZ.toFixed(2)} m · ${ms.toFixed(0)} ms<br>` +
+    `<span class="muted">${cur.channels.LIDAR_TOP.filename.split('/').pop()}</span>`;
+  schedule();
+}
+
+function computeColors() {
+  if (!pts) return;
+  colors = new Uint32Array(n);
+  const mode = $('colorBy').value;
+  for (let i = 0; i < n; i++) {
+    const o = i * 5; let t;
+    if (mode === 'height') t = (pts[o + 2] - groundZ + 0.3) / 4;
+    else if (mode === 'intensity') t = Math.sqrt(pts[o + 3] / 255);
+    else if (mode === 'ring') t = pts[o + 4] / maxRing;
+    else t = Math.hypot(pts[o], pts[o + 1]) / 60;
+    colors[i] = LUT[Math.max(0, Math.min(255, (t * 255) | 0))];
+  }
+}
+
+let img = null, zbuf = null, pending = false;
+function schedule() { if (!pending) { pending = true; requestAnimationFrame(render); } }
+
+function camera() {
+  const W = cv.width, H = cv.height, cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  const fx = -cp * Math.cos(view.yaw), fy = -cp * Math.sin(view.yaw), fz = -sp;
+  let rx = fy, ry = -fx; const rn = Math.hypot(rx, ry) || 1; rx /= rn; ry /= rn;
+  const ux = ry * fz, uy = -rx * fz, uz = rx * fy - ry * fx;
+  const cx = view.tx - fx * view.dist, cy = view.ty - fy * view.dist, cz = view.tz - fz * view.dist;
+  const F = view.ortho ? (H / 2) / (view.dist * Math.tan(view.fov / 2)) : (H / 2) / Math.tan(view.fov / 2);
+  return { W, H, fx, fy, fz, rx, ry, ux, uy, uz, cx, cy, cz, F };
+}
+function project(c, x, y, z) {
+  const dx = x - c.cx, dy = y - c.cy, dz = z - c.cz;
+  const zc = dx * c.fx + dy * c.fy + dz * c.fz;
+  if (zc < 0.3) return null;
+  const k = view.ortho ? c.F : c.F / zc;
+  return [c.W / 2 + (dx * c.rx + dy * c.ry) * k, c.H / 2 - (dx * c.ux + dy * c.uy + dz * c.uz) * k, zc];
+}
+
+function render() {
+  pending = false;
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(1, Math.round(cv.clientWidth * dpr)), H = Math.max(1, Math.round(cv.clientHeight * dpr));
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  if (!img || img.width !== W || img.height !== H) { img = ctx.createImageData(W, H); zbuf = new Float32Array(W * H); }
+  const px = new Uint32Array(img.data.buffer);
+  px.fill(0xff0a0807); zbuf.fill(Infinity);
+  const c = camera();
+  const size = Math.max(1, Math.round(+$('ptSize').value * dpr * 0.75)), half = size >> 1;
+  const maxR2 = (+$('maxRange').value) ** 2;
+  if (pts) {
+    const { fx, fy, fz, rx, ry, ux, uy, uz, cx, cy, cz, F } = c, ortho = view.ortho, W2 = W / 2, H2 = H / 2;
+    for (let i = 0; i < n; i++) {
+      const o = i * 5, x = pts[o], y = pts[o + 1], z = pts[o + 2];
+      if (x * x + y * y > maxR2) continue;
+      const dx = x - cx, dy = y - cy, dz = z - cz;
+      const zc = dx * fx + dy * fy + dz * fz;
+      if (zc < 0.3) continue;
+      const k = ortho ? F : F / zc;
+      const sx = (W2 + (dx * rx + dy * ry) * k) | 0, sy = (H2 - (dx * ux + dy * uy + dz * uz) * k) | 0;
+      if (sx < half || sy < half || sx >= W - size || sy >= H - size) continue;
+      const col = colors[i];
+      for (let yy = sy - half, ye = yy + size; yy < ye; yy++) {
+        let p = yy * W + sx - half;
+        for (let e = p + size; p < e; p++) if (zc < zbuf[p]) { zbuf[p] = zc; px[p] = col; }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  drawOverlay(c, dpr);
+}
+
+function polyline(c, P) {
+  ctx.beginPath(); let pen = false;
+  for (const [x, y, z] of P) {
+    const q = project(c, x, y, z);
+    if (!q) { pen = false; continue; }
+    pen ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); pen = true;
+  }
+  ctx.stroke();
+}
+
+function drawOverlay(c, dpr) {
+  const g = groundZ;
+  if ($('grid').checked) {
+    ctx.lineWidth = dpr; ctx.strokeStyle = 'rgba(140,150,170,.28)';
+    ctx.fillStyle = 'rgba(140,150,170,.7)'; ctx.font = `${11 * dpr}px system-ui`;
+    for (let r = 10; r <= 100; r += 10) {
+      const P = []; for (let a = 0; a <= 96; a++) { const t = a / 96 * 2 * Math.PI; P.push([r * Math.cos(t), r * Math.sin(t), g]); }
+      polyline(c, P);
+      const q = project(c, r, 0, g); if (q) ctx.fillText(r + 'm', q[0] + 3, q[1] - 3);
+    }
+    polyline(c, [[-100, 0, g], [100, 0, g]]); polyline(c, [[0, -100, g], [0, 100, g]]);
+  }
+  // ego footprint (approx. 4.6 x 1.9 m, rear axle unknown -> centered at sensor) + axes
+  ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+  polyline(c, [[2.3, 0.95, g], [2.3, -0.95, g], [-2.3, -0.95, g], [-2.3, 0.95, g], [2.3, 0.95, g]]);
+  ctx.lineWidth = 2.5 * dpr;
+  ctx.strokeStyle = '#ff5d5d'; polyline(c, [[0, 0, 0], [4, 0, 0]]);
+  ctx.strokeStyle = '#4ade80'; polyline(c, [[0, 0, 0], [0, 4, 0]]);
+  ctx.strokeStyle = '#4ea1ff'; polyline(c, [[0, 0, 0], [0, 0, 3]]);
+}
+
+// ---------- lidar interaction ----------
+function setView(kind) {
+  if (kind === 'bev') Object.assign(view, { yaw: Math.PI, pitch: Math.PI / 2 - 1e-4, dist: 90, tx: 15, ty: 0, tz: groundZ, ortho: true });
+  else Object.assign(view, { yaw: Math.PI, pitch: 0.45, dist: 45, tx: 10, ty: 0, tz: groundZ, ortho: false });
+  $('vBev').classList.toggle('on', kind === 'bev'); $('v3d').classList.toggle('on', kind !== 'bev');
+  schedule();
+}
+let drag = null;
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; });
+cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan) {
+    const c = camera(), s = view.ortho ? 1 / c.F * (window.devicePixelRatio || 1) : view.dist / c.F * (window.devicePixelRatio || 1);
+    // move along screen right and screen up, projected onto the ground plane
+    let fx = c.ux, fy = c.uy; const fn = Math.hypot(fx, fy) || 1; fx /= fn; fy /= fn;
+    view.tx -= (c.rx * dx - fx * dy) * s; view.ty -= (c.ry * dx - fy * dy) * s;
+  } else {
+    if (view.ortho && view.pitch > 1.5) { view.yaw -= dx * 0.006; }
+    else { view.yaw -= dx * 0.006; view.pitch = Math.max(0.02, Math.min(Math.PI / 2 - 1e-4, view.pitch + dy * 0.006)); }
+    if (view.ortho && view.pitch < 1.5) { view.ortho = false; $('vBev').classList.remove('on'); $('v3d').classList.add('on'); }
+  }
+  schedule();
+});
+cv.addEventListener('wheel', e => { e.preventDefault(); view.dist = Math.max(3, Math.min(600, view.dist * Math.exp(e.deltaY * 0.0012))); schedule(); }, { passive: false });
+cv.addEventListener('dblclick', () => setView($('vBev').classList.contains('on') ? 'bev' : '3d'));
+new ResizeObserver(schedule).observe(cv);
+
+// ---------- controls ----------
+$('vBev').onclick = () => setView('bev');
+$('v3d').onclick = () => setView('3d');
+$('colorBy').onchange = () => { computeColors(); schedule(); };
+$('ptSize').onchange = $('maxRange').onchange = $('grid').onchange = schedule;
+$('sceneSel').onchange = () => go(+$('sceneSel').value, 0);
+$('slider').oninput = () => go(sceneIdx, +$('slider').value);
+$('prev').onclick = () => go(sceneIdx, sampleIdx - 1);
+$('next').onclick = () => go(sceneIdx, sampleIdx + 1);
+$('play').onclick = togglePlay;
+// keep focus off buttons so Space/arrow shortcuts don't also "click" the focused button
+document.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+
+async function togglePlay() {
+  playing = !playing;
+  $('play').classList.toggle('on', playing); $('play').textContent = playing ? '❚❚ 정지' : '▶ 재생';
+  while (playing) {
+    const t0 = performance.now();
+    const sc = scenes[sceneIdx];
+    if (sampleIdx + 1 < sc.samples.length) await go(sceneIdx, sampleIdx + 1);
+    else if ($('autoNext').checked && nextInList(1) !== undefined) await go(nextInList(1), 0);
+    else { togglePlay(); break; }
+    const wait = 500 / +$('speed').value - (performance.now() - t0);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  }
+}
+
+// ---------- left navigation: 전체 / 중복 (1단계) / 수량 (2단계) / 검토 / 위험 / 분포 ----------
+let navTab = 'all', listOrder = [], risk = null, allGroupBy = 'route';
+const navChecked = new Set();
+const STATE_INFO = { s1: ['삭제 · 중복', 'var(--c-s1)'], s2: ['삭제 · 수량 조정', 'var(--c-s2)'],
+  review: ['유지 · 검토 대기', 'var(--c-keep)'], must: ['필수 유지', '#4ade80'], keep: ['유지', 'var(--c-keep)'] };
+const STATE_ORDER = ['s1', 's2', 'review', 'must', 'keep'];
+const isDel = st => st === 's1' || st === 's2';
+// stage 2 deletes by situation-group excess; the closest group mate is a look-alike only within sim_d
+const simD = () => (selection && selection.params && selection.params.sim_d) || 1.0;
+const subSimilar = s => s.sub_dist == null || s.sub_dist <= simD();
+// curate.py --mode stops: only same-place stops are thinned (largest LiDAR diff kept), no stage 2 / review
+const stopsMode = () => !!(selection && selection.mode === 'stops');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function sceneState(name) {
+  const s = selection && !selection.missing ? selection.scenes[name] : null;
+  if (s && s.status === 'remove') return s.stage === 2 ? 's2' : 's1';
+  if (s && s.review) return 'review';
+  return s && s.status === 'must_keep' ? 'must' : 'keep';
+}
+const selOf = n => (selection && !selection.missing && selection.scenes[n]) || {};
+const riskOf = n => (risk && !risk.missing && risk.scenes[n]) || null;
+function riskTag(n) {
+  const r = riskOf(n);
+  if (!r || r.score < 1) return '';
+  return `<span class="risk-tag" title="${esc(r.events.map(e => `${e.text} @${e.t.toFixed(1)}s`).join('\n'))}">⚠ 위험 ${r.level}</span>`;
+}
+async function loadRisk() { try { risk = await (await fetch('/api/risk')).json(); } catch (e) { risk = { missing: true }; } }
+const sampleAt = (i, t) => nearestIdxByTime(scenes[i].sample_ts, scenes[i].sample_ts[0] + t * 1e6, v => v);
+
+function setNav(t) {
+  if (stopsMode() && (t === 's2' || t === 'rev')) t = 'all';   // those tabs do not exist in stops mode
+  navTab = t;
+  document.querySelectorAll('#navTabs button').forEach(b => b.classList.toggle('on', b.dataset.nav === t));
+  const dist = t === 'dist';
+  document.body.classList.toggle('dist-mode', dist);
+  $('distView').hidden = !dist;
+  renderNav();
+  if (dist) renderDist(); else { drawRoute(); drawSpeed(); schedule(); }   // canvases need a redraw after being hidden
+  try { localStorage.setItem('viewer.nav', t); } catch (e) {}
+}
+document.querySelectorAll('#navTabs button').forEach(b => { b.onclick = () => setNav(b.dataset.nav); });
+
+function statusCell(n) {
+  const [lab, col] = STATE_INFO[sceneState(n)];
+  return `<span style="color:${col}">${lab}</span>`;
+}
+function renderNav() {
+  if (!scenes.length) return;
+  const idxAll = scenes.map((s, i) => i);
+  const byState = st => idxAll.filter(i => sceneState(scenes[i].name) === st);
+  const riskIdx = idxAll.filter(i => (riskOf(scenes[i].name) || {}).score >= 1)
+    .sort((a, b) => riskOf(scenes[b].name).score - riskOf(scenes[a].name).score);
+  const revList = (selection && selection.review) || [], conflicts = (selection && selection.conflicts) || [];
+  const counts = { all: scenes.length, s1: byState('s1').length, s2: byState('s2').length, rev: revList.length + conflicts.length, risk: riskIdx.length };
+  const NAMES = { all: '전체', s1: stopsMode() ? '정지' : '중복', s2: '수량', rev: '검토', risk: '위험', dist: '분포' };
+  document.querySelectorAll('#navTabs button').forEach(b => {
+    b.innerHTML = NAMES[b.dataset.nav] + (counts[b.dataset.nav] != null ? `<span class="n">${counts[b.dataset.nav]}</span>` : '');
+    b.hidden = stopsMode() && (b.dataset.nav === 's2' || b.dataset.nav === 'rev');
+  });
+  let head = '', html = '';
+  if (navTab === 'all') {
+    head = `<div class="row"><span>묶음</span><select id="allGroupBy">
+        <option value="route"${allGroupBy === 'route' ? ' selected' : ''}>route별</option>
+        <option value="group"${allGroupBy === 'group' ? ' selected' : ''}>상황 그룹별</option>
+        <option value="status"${allGroupBy === 'status' ? ' selected' : ''}>상태별</option></select>
+        <span title="↑/↓ 키와 '다음 scene 이어서'도 이 목록 순서">↑/↓ 목록 순서</span></div>
+      <div class="row"><button id="playChecked"${navChecked.size < 2 ? ' disabled' : ''}>☑ 선택한 ${navChecked.size}개 동시 재생</button>
+        <button id="clearChecked"${navChecked.size ? '' : ' disabled'}>선택 해제</button></div>`;
+    const keyOf = i => allGroupBy === 'group' ? (selOf(scenes[i].name).group_label || '(선택 결과 없음)')
+      : allGroupBy === 'status' ? sceneState(scenes[i].name) : shortLog(scenes[i].log);
+    const sections = new Map();
+    for (const i of idxAll) { const k = keyOf(i); if (!sections.has(k)) sections.set(k, []); sections.get(k).push(i); }
+    const keys = [...sections.keys()];
+    if (allGroupBy === 'status') keys.sort((a, b) => STATE_ORDER.indexOf(a) - STATE_ORDER.indexOf(b));
+    if (allGroupBy === 'group') keys.sort();
+    listOrder = keys.flatMap(k => sections.get(k));
+    html = keys.map(k => {
+      const idx = sections.get(k), nrm = idx.filter(i => isDel(sceneState(scenes[i].name))).length;
+      return `<div class="sec">${allGroupBy === 'status' ? STATE_INFO[k][0] : esc(k)} (${idx.length}개${allGroupBy !== 'status' ? ` · 삭제 ${nrm}` : ''})</div>`
+        + idx.map(i => {
+          const n = scenes[i].name, [, col] = STATE_INFO[sceneState(n)], s = selOf(n);
+          const meta = [allGroupBy !== 'route' ? shortLog(scenes[i].log) : '', allGroupBy !== 'group' ? (s.group_label || '').split(' · ').pop() : '']
+            .filter(Boolean).join(' · ');
+          return `<div class="srow${i === sceneIdx ? ' cur' : ''}" data-i="${i}" title="${esc((s.detail || []).join('\n') || '유지')}">`
+            + `<input type="checkbox" data-chk="${n}"${navChecked.has(n) ? ' checked' : ''}><i class="dot" style="background:${col}"></i>`
+            + `<b class="mono">${n.slice(-4)}</b><span class="meta">${esc(meta)} ${riskTag(n)}</span>${statusCell(n)}</div>`;
+        }).join('');
+    }).join('');
+  } else if (navTab === 's1' || navTab === 's2') {
+    const st = navTab, idx = byState(st);
+    head = { s1: stopsMode()
+               ? '정지만 정리: 같은 장소에 멈춘 scene 중 LiDAR diff(0.5초 프레임 차)가 가장 큰 1개만 남기고 나머지 삭제. 다른 삭제는 없음 · 카드 클릭 = 남긴 scene과 동시 재생'
+               : '1단계 중복: 같은 route 안 같은 장소·같은 상태이고, 남긴 대표가 주변 사건까지 대신할 때만 삭제 · 카드 클릭 = 대표와 동시 재생',
+             s2: '2단계 수량 조정 (중복 아님): 들어온 route에서만, 많이 쌓인 상황 그룹을 덜어냄. 교통 유형이 사라지지 않는 후보부터 · 카드 클릭 = 가장 가까운 scene과 동시 재생' }[st];
+    listOrder = idx;
+    const routes = selection && selection.routes ? selection.routes : [];
+    html = routes.map(r => {
+      if (r.fixed) return `<div class="sec">${shortLog(r.log)} · ${r.n}개 · 누적 데이터로 고정 (삭제 없음)</div>`;
+      const mine = idx.filter(i => scenes[i].log === r.log);
+      const cnt = stopsMode() ? `${shortLog(r.log)} · ${r.n}개 중 ${r.stage1.length}개 삭제 · 정지 그룹 ${(r.stage1_groups || []).length}개`
+        : `${shortLog(r.log)} · ${r.n}개 중 ${r.quota}개 삭제 (중복 ${r.stage1.length} · 수량 ${r.stage2.length}`
+        + `${(r.review || []).length ? ' · 검토 ' + r.review.length : ''}${r.conflict ? ' · 충돌' : ''})`;
+      const notes = st === 's1' && r.notes.length ? `<div class="rnote">${r.notes.map(esc).join('<br>')}</div>` : '';
+      if (!mine.length) return `<div class="sec">${cnt} · 이 탭 없음</div>${notes}`;
+      return `<div class="sec">${cnt}</div>${notes}`
+        + mine.map(i => {
+          const n = scenes[i].name, s = selOf(n);
+          return `<div class="card${i === sceneIdx ? ' cur' : ''}" data-i="${i}">`
+            + `<div class="hd"><i class="dot" style="background:${STATE_INFO[st][1]}"></i><b class="mono">${n.slice(-4)}</b>`
+            + `<span class="muted">${shortLog(scenes[i].log)} · ${esc((s.group_label || '').split(' · ').pop())}</span>${riskTag(n)}`
+            + ((s.compare || []).length ? (s.stage === 2 && !subSimilar(s)
+              ? `<span class="pill weak" title="같은 상황 그룹에 비슷한 scene 없음 (거리 ${s.sub_dist} > ${simD()}): 개수 조정 삭제">≠ ${s.compare[0].slice(-4)}</span>`
+              : `<span class="pill" title="${s.stage === 1 ? '남긴 대표' : '비슷한 scene · 거리 ' + s.sub_dist}">↔ ${s.compare[0].slice(-4)}</span>`) : '') + `</div>`
+            + `<div class="sum">${esc(s.summary || s.reason || '')}</div>`
+            + `<details><summary>근거 자세히</summary><ol>${(s.detail || []).map(l => `<li>${esc(l)}</li>`).join('')}</ol></details>`
+            + `<div class="acts"><button data-act="play" data-name="${n}">▶ 비교 전체</button><button data-act="go" data-name="${n}">이동</button></div></div>`;
+        }).join('');
+    }).join('') || '<div class="muted" style="padding:8px">해당 scene 없음 (python tools/curate.py 실행 필요)</div>';
+  } else if (navTab === 'rev') {
+    head = '사람 판단이 필요한 것. 1단계 검토: 남긴 대표가 이 scene의 사건을 대신하는지 불확실 → 판단 전까지 유지. '
+      + '같음/다름은 저장되고 다음 curate.py 실행 때 반영. 2단계 충돌: 보호 scene 때문에 할당을 못 채운 route (자동 삭제 안 함).';
+    listOrder = revList.map(rv => sceneIndex(rv.scene));
+    html = (revList.length ? '<div class="sec">1단계 검토 · 중복인지 불확실</div>' : '') + revList.map(rv => {
+      const i = sceneIndex(rv.scene), lab = pairLabels[[rv.scene, rv.ref].sort().join('|')];
+      return `<div class="card${i === sceneIdx ? ' cur' : ''}" data-i="${i}">`
+        + `<div class="hd"><i class="dot" style="background:var(--c-keep)"></i><b class="mono">${rv.scene.slice(-4)}</b>`
+        + `<span class="muted">${esc(rv.route)} · 대표 ${rv.ref.slice(-4)}</span>`
+        + `<span class="pill${lab ? '' : ' weak'}">${lab ? (lab.same ? '같음 → 다음 실행 때 삭제' : '다름 → 유지') : '판단 대기'}</span></div>`
+        + `<div class="sum">${esc(rv.text)}</div>`
+        + `<div class="acts"><button data-act="playrev" data-name="${rv.scene}">▶ 비교</button>`
+        + `<button data-act="same" data-name="${rv.scene}" data-ref="${rv.ref}"${lab && lab.same ? ' class="on"' : ''}>같음</button>`
+        + `<button data-act="diff" data-name="${rv.scene}" data-ref="${rv.ref}"${lab && lab.same === false ? ' class="on"' : ''}>다름</button></div></div>`;
+    }).join('')
+      + (conflicts.length ? '<div class="sec">2단계 충돌 · 자동 삭제 안 함</div>' : '')
+      + conflicts.map(c => `<div class="card"><div class="sum">${esc(c.text)}</div></div>`).join('')
+      + (revList.length || conflicts.length ? '' : '<div class="muted" style="padding:8px">검토할 것 없음</div>');
+  } else if (navTab === 'risk') {
+    const P = risk && risk.params;
+    head = P ? `위험 이벤트 기준: 급제동 ≤ ${P.brake} m/s² · 급한 횡가속 ≥ ${P.lat} m/s² · 근접 추종 차간시간 ≤ ${P.thw} s · 빠른 접근 TTC ≤ ${P.ttc} s `
+      + '(실제로 달린 경로 위, 자차 폭 2 m 안의 물체). 점수 = 가장 심한 이벤트, 1 = 기준선. 위험 scene은 자동 삭제하지 않음.'
+      : '위험 결과 없음 — python tools/scene_risk.py 실행';
+    listOrder = riskIdx;
+    html = riskIdx.map(i => {
+      const n = scenes[i].name, r = riskOf(n), ev = r.events[0];
+      return `<div class="card${i === sceneIdx ? ' cur' : ''}" data-i="${i}" data-k="${sampleAt(i, ev.t)}">`
+        + `<div class="hd"><span class="risk-tag">⚠ ${r.level} ${r.score.toFixed(2)}</span><b class="mono">${n.slice(-4)}</b>`
+        + `<span class="muted">${shortLog(scenes[i].log)} · ${esc(selOf(n).group_label || '')}</span>${statusCell(n)}</div>`
+        + `<ol>${r.events.map(e => `<li>${esc(e.text)} · ${e.t.toFixed(1)} s</li>`).join('')}</ol>`
+        + `<div class="acts"><button data-act="gort" data-name="${n}" data-t="${ev.t}">이벤트 시점으로</button>`
+        + `<button data-act="playrisk" data-name="${n}" data-t="${ev.t}">▶ 재생</button></div></div>`;
+    }).join('') || '<div class="muted" style="padding:8px">위험 이벤트가 있는 scene 없음</div>';
+  } else {
+    head = '오른쪽에 전체 변수 분포를 표시합니다. 막대에 마우스를 올리면 해당 scene, 표 보기에서 행을 누르면 그 scene으로 이동합니다.';
+    listOrder = idxAll;
+  }
+  $('navHead').innerHTML = head;
+  $('navList').innerHTML = html;
+  const cur = $('navList').querySelector('.cur');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
+}
+$('nav').addEventListener('click', e => {
+  const chk = e.target.closest('[data-chk]');
+  if (chk) { chk.checked ? navChecked.add(chk.dataset.chk) : navChecked.delete(chk.dataset.chk); renderNav(); return; }
+  if (e.target.closest('#playChecked')) {
+    const names = scenes.map(s => s.name).filter(n => navChecked.has(n));
+    return openPlayer(`선택한 ${names.length}개 scene 동시 재생`, [], names, names.map(() => ''));
+  }
+  if (e.target.closest('#clearChecked')) { navChecked.clear(); return renderNav(); }
+  const b = e.target.closest('[data-act]');
+  if (b) {
+    const n = b.dataset.name, i = sceneIndex(n), s = selOf(n);
+    if (b.dataset.act === 'go') return go(i, 0);
+    if (b.dataset.act === 'gort') return go(i, sampleAt(i, +b.dataset.t));
+    if (b.dataset.act === 'playrisk') {
+      const r = riskOf(n);
+      return openPlayer(`위험 scene ${n}`, r.events.map(ev => `${ev.text} · ${ev.t.toFixed(1)} s`), [n], ['위험'], Math.max(0, +b.dataset.t - 3));
+    }
+    if (b.dataset.act === 'play') return playDeletion(n, true);
+    if (b.dataset.act === 'playrev') return playReview(n);
+    if (b.dataset.act === 'same' || b.dataset.act === 'diff') return savePairFor(n, b.dataset.ref, b.dataset.act === 'same');
+  }
+  const card = e.target.closest('.card[data-i]');
+  if (e.target.closest('details')) return;                    // expanding the reasons must not start the player
+  if (card && (navTab === 's1' || navTab === 's2')) {   // selecting a deletion: deleted + standing-in scene, camera + route together
+    go(+card.dataset.i, 0);
+    return playDeletion(scenes[+card.dataset.i].name, false);
+  }
+  if (card && navTab === 'rev' && card.dataset.i) { go(+card.dataset.i, 0); return playReview(scenes[+card.dataset.i].name); }
+  const row = e.target.closest('[data-i]');
+  if (row) go(+row.dataset.i, +(row.dataset.k || 0));
+});
+$('nav').addEventListener('change', e => { if (e.target.id === 'allGroupBy') { allGroupBy = e.target.value; renderNav(); } });
+function playDeletion(n, all) {
+  // deleted scene + the scene that stands in for it (stage 1: representative, stage 2: closest group mate);
+  // the other comparison scenes are one click away (or all shown with all=true)
+  const s = selOf(n), comp = (s.compare || []).slice(0, 5);
+  const lg = x => scenes[sceneIndex(x)].log;
+  const origin = c => lg(c) === lg(n) ? `이번 route ${shortLog(lg(c))} · ${STATE_INFO[sceneState(c)][0]}` : `누적 데이터 ${shortLog(lg(c))} (삭제 안 함)`;
+  const sim = s.stage !== 2 || subSimilar(s), kind = s.kind || `${s.stage}단계`;
+  const role = (c, k) => s.stage === 1 ? (k === 0 ? `${stopsMode() ? '남긴 scene (diff 최대 ' + (selOf(c).lidar_cells || 0).toFixed(0) + ')' : '남긴 대표'} · ${STATE_INFO[sceneState(c)][0]}`
+      : `같은 장소 그룹${stopsMode() ? ' · diff ' + (selOf(c).lidar_cells || 0).toFixed(0) : ''} · ${STATE_INFO[sceneState(c)][0]}`)
+    : k === 0 ? `${sim ? '비슷한 scene' : '가장 가까운 scene (비슷하지 않음)'} · 거리 ${s.sub_dist ?? '?'} · ${origin(c)}`
+    : `같은 상황 · ${origin(c)}`;
+  const shown = all ? comp : comp.slice(0, 1);
+  const title = !comp.length ? `① ${n} 삭제(${kind})`
+    : `① ${n} 삭제(${kind})  ${sim ? '↔' : '≠'}  ② ${comp[0]} ${s.stage === 1 ? '대표' : sim ? '비슷' : '가장 가까운'}`;
+  openPlayer(title, s.detail || [], [n, ...shown], [`삭제 · ${kind}`, ...shown.map(role)], 0,
+    comp.filter(c => !shown.includes(c)), s.summary || '');
+  comp.forEach((c, k) => { if (!shown.includes(c)) PL.roles[c] = role(c, k); });
+}
+function playReview(n) {   // stage-1 review item: the scene (kept for now) next to the representative it may duplicate
+  const rv = ((selection && selection.review) || []).find(x => x.scene === n);
+  if (!rv) return;
+  const others = rv.reps.filter(r => r !== rv.ref);
+  openPlayer(`① ${n} 검토 (유지 중)  ?  ② ${rv.ref} 대표`, [rv.text], [n, rv.ref], ['검토 대기 · 판단 전까지 유지', '남긴 대표'], 0, others, rv.text);
+  others.forEach(r => { PL.roles[r] = '남긴 대표'; });
+}
+async function savePairFor(a, b, same) {   // 같음/다름 on a review card; clicking the active answer again clears it
+  const cur = pairLabels[[a, b].sort().join('|')];
+  if (cur && cur.same === same) same = null;
+  try {
+    const r = await fetch('/api/pairs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ a, b, same }) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    pairLabels = (await r.json()).pairs || {};
+  } catch (e) { $('navHead').textContent = '저장 실패: ' + e.message; return; }
+  renderNav();
+}
+function nextInList(d) {   // ↑/↓ and "다음 scene 이어서" follow the list of the active tab
+  if (!listOrder.length) return undefined;
+  const pos = listOrder.indexOf(sceneIdx);
+  if (pos >= 0) return listOrder[pos + d];
+  return d > 0 ? listOrder.find(i => i > sceneIdx) : [...listOrder].reverse().find(i => i < sceneIdx);
+}
+function updateSceneSel() {   // header dropdown carries the selection state too
+  scenes.forEach((s, i) => {
+    const o = $('sceneSel').options[i];
+    if (o) o.textContent = `${s.name} · ${shortLog(s.log)} (${s.samples.length})${selection && !selection.missing ? ' · ' + STATE_INFO[sceneState(s.name)][0] : ''}`;
+  });
+}
+
+// ---------- synchronized player: several scenes on one time axis (full-rate camera frames) ----------
+const PL = { names: [], tiles: [], t: 0, playing: false, req: 0, dur: 20, frames: new Map(), last: 0 };
+function frameList(name, cam) {
+  const key = name + '|' + cam;
+  if (!PL.frames.has(key)) PL.frames.set(key, fetch(`/api/frames/${name}?ch=${cam}`).then(r => r.json()));
+  return PL.frames.get(key);
+}
+function openPlayer(title, detail, names, roles, t0 = 0, extras = [], summary = '') {
+  plStop();
+  $('plTitle').textContent = title;
+  $('plDetail').innerHTML = detail.map(l => `<li>${esc(l)}</li>`).join('');
+  $('plSum').textContent = (summary || detail[0] || '') + (detail.length ? '  (근거 자세히)' : '');
+  $('plBox').hidden = !detail.length;
+  if (!$('plCam').options.length) $('plCam').innerHTML = ['CAM_FRONT', 'CAM_FRONT_LEFT', 'CAM_FRONT_RIGHT', 'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT']
+    .map(c => `<option>${c}</option>`).join('');
+  PL.names = names.filter(n => sceneIndex(n) >= 0);
+  PL.roles = Object.fromEntries(PL.names.map((n, k) => [n, roles[k] || '']));
+  PL.extras = extras.filter(n => sceneIndex(n) >= 0 && !PL.names.includes(n));
+  PL.t = t0; $('player').hidden = false;
+  renderPlTiles();
+}
+const NUM = ['①', '②', '③', '④', '⑤', '⑥', '⑦'];
+function tileColor(n, k) {   // deleted scene in its stage colour, everything else by its own state
+  return STATE_INFO[sceneState(n)][1].startsWith('var(')
+    ? getComputedStyle(document.documentElement).getPropertyValue(STATE_INFO[sceneState(n)][1].slice(4, -1)).trim() : STATE_INFO[sceneState(n)][1];
+}
+function renderPlTiles() {
+  const cols = PL.names.length <= 1 ? 1 : PL.names.length <= 4 ? 2 : 3;
+  $('plGrid').style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  $('plGrid').style.maxWidth = cols === 1 ? '1100px' : '';
+  $('plGrid').innerHTML = PL.names.map((n, k) => `<figure style="--tc:${tileColor(n, k)}">`
+    + `<div class="plhd"><span class="num">${NUM[k]}</span><b class="mono">${n}</b><span>${esc(PL.roles[n] || '')}</span>`
+    + `<span class="muted">${shortLog(scenes[sceneIndex(n)].log)}</span>`
+    + (k > 0 ? `<button data-drop="${n}" title="이 scene 빼기">✕</button>` : '') + `<button data-go="${n}">이동</button></div>`
+    + `<div class="plimg"><img alt=""><span class="plbadge">${NUM[k]} ${n.slice(-4)}</span></div>`
+    + `<canvas class="plmap"></canvas><figcaption class="muted"></figcaption></figure>`).join('');
+  PL.tiles = [...$('plGrid').children].map((f, k) => ({ name: PL.names[k], num: NUM[k], img: f.querySelector('img'), map: f.querySelector('canvas'),
+    cap: f.querySelector('figcaption'), cur: null, color: tileColor(PL.names[k], k) }));
+  $('plExtra').innerHTML = (PL.names.length > 1 ? '같은 시간축(0~20 s) · 지도 굵은 선 = 지나온 경로' : '')
+    + (PL.extras.length ? ` · 추가: ${PL.extras.map(n => `<button data-add="${n}">+ ${n.slice(-4)}</button>`).join(' ')}` : '');
+  plShow(PL.t);
+}
+$('plExtra').onclick = e => {
+  const b = e.target.closest('[data-add]'); if (!b) return;
+  PL.names.push(b.dataset.add); PL.roles[b.dataset.add] = PL.roles[b.dataset.add] || '추가 비교';
+  PL.extras = PL.extras.filter(n => n !== b.dataset.add); renderPlTiles();
+};
+function drawTileMap(tile, t) {
+  const cv = tile.map, dpr = sizeCanvas(cv), c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const sc = scenes[sceneIndex(tile.name)], r = sc.route;
+  c.fillStyle = '#0b0d11'; c.fillRect(0, 0, W, H);
+  if (!r.length) return;
+  const [x0, x1, y0, y1] = bounds([sc]);
+  const span = Math.max(80, x1 - x0, y1 - y0) * 1.3, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, s = Math.min(W, H) / span;
+  const P = (x, y) => [W / 2 + (x - cx) * s, H / 2 - (y - cy) * s];
+  const path = (pts, upto = pts.length) => { c.beginPath(); pts.slice(0, upto).forEach((p, k) => { const [u, v] = P(p[0], p[1]); k ? c.lineTo(u, v) : c.moveTo(u, v); }); c.stroke(); };
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = '#2f343d'; c.lineWidth = 2 * dpr;
+  for (const o of scenes) if (o !== sc && o.route.length) path(o.route);          // other drives for context
+  const k = nearestIdxByTime(r, sc.sample_ts[0] + t * 1e6, q => q[2]);
+  c.strokeStyle = tile.color; c.globalAlpha = 0.35; c.lineWidth = 5 * dpr; path(r); c.globalAlpha = 1;
+  path(r, k + 1);
+  const p = r[k], a = r[Math.max(0, k - 3)], b = r[Math.min(r.length - 1, k + 3)], [u, v] = P(p[0], p[1]);
+  if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 0.3) {
+    const yaw = Math.atan2(b[1] - a[1], b[0] - a[0]), L = 16 * dpr;
+    c.strokeStyle = '#fff'; c.lineWidth = 2.5 * dpr; c.beginPath(); c.moveTo(u, v); c.lineTo(u + Math.cos(yaw) * L, v - Math.sin(yaw) * L); c.stroke();
+  }
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(u, v, 5.5 * dpr, 0, 7); c.fill();
+  c.strokeStyle = tile.color; c.lineWidth = 2.5 * dpr; c.stroke();
+  const bar = 20 * s; c.strokeStyle = '#898781'; c.lineWidth = dpr; c.beginPath(); c.moveTo(W - 10 * dpr - bar, H - 10 * dpr); c.lineTo(W - 10 * dpr, H - 10 * dpr); c.stroke();
+  c.fillStyle = '#898781'; c.font = `${10 * dpr}px system-ui`; c.textAlign = 'right'; c.fillText('20 m', W - 10 * dpr, H - 14 * dpr);
+  c.textAlign = 'left'; c.fillText(`${p[3].toFixed(0)} km/h`, 8 * dpr, 16 * dpr);
+}
+async function plShow(t) {
+  const cam = $('plCam').value, my = PL.req;
+  $('plSeek').value = t; $('plTime').textContent = `${t.toFixed(1)} s`;
+  const loads = [];
+  for (const tile of PL.tiles) {
+    const sc = scenes[sceneIndex(tile.name)], fr = await frameList(tile.name, cam);
+    if (my !== PL.req) return;
+    const k = nearestIdxByTime(fr.ts, sc.sample_ts[0] + t * 1e6, v => v), fn = fr.fn[k];
+    if (tile.cur !== fn) { tile.cur = fn; tile.img.src = '/data/' + fn; loads.push(tile.img.decode().catch(() => {})); }
+    if (sc.route.length) {
+      const p = sc.route[nearestIdxByTime(sc.route, sc.sample_ts[0] + t * 1e6, q => q[2])];
+      tile.cap.textContent = `${p[3].toFixed(0)} km/h · ${shortLog(sc.log)} · ${selOf(tile.name).group_label || ''}`;
+    }
+  }
+  await Promise.all(loads);
+  if (my !== PL.req) return;
+  for (const tile of PL.tiles) drawTileMap(tile, t);
+  drawPlSpeed(t);
+}
+async function plLoop(my) {
+  PL.last = performance.now();
+  while (PL.playing && my === PL.req) {
+    const t0 = performance.now();
+    await plShow(PL.t);
+    const wait = 1000 / +$('plFps').value - (performance.now() - t0);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    if (!PL.playing || my !== PL.req) break;
+    const now = performance.now();
+    PL.t += (now - PL.last) / 1000 * +$('plRate').value;   // real time: skip frames when decoding lags
+    PL.last = now;
+    if (PL.t > PL.dur) PL.t = 0;
+  }
+}
+function plStop() { PL.playing = false; PL.req++; $('plPlay').textContent = '▶ 재생'; $('plPlay').classList.remove('on'); }
+function plToggle() {
+  if (PL.playing) return plStop();
+  PL.playing = true; $('plPlay').textContent = '❚❚ 정지'; $('plPlay').classList.add('on');
+  plLoop(++PL.req);
+}
+$('plPlay').onclick = plToggle;
+$('plSeek').oninput = () => { plStop(); PL.t = +$('plSeek').value; plShow(PL.t); };
+$('plCam').onchange = () => { PL.tiles.forEach(t => { t.cur = null; }); plShow(PL.t); };
+$('plClose').onclick = () => { plStop(); $('player').hidden = true; };
+$('plGrid').addEventListener('click', e => {
+  const d = e.target.closest('[data-drop]'); if (!d) return;
+  PL.names = PL.names.filter(n => n !== d.dataset.drop); PL.extras.push(d.dataset.drop); renderPlTiles();
+});
+$('plGrid').onclick = e => { const b = e.target.closest('[data-go]'); if (b) { plStop(); $('player').hidden = true; setNav(navTab === 'dist' ? 'all' : navTab); go(sceneIndex(b.dataset.go), sampleAt(sceneIndex(b.dataset.go), PL.t)); } };
+function drawPlSpeed(t) {
+  const cvs = $('plSpeedCv'), dpr = sizeCanvas(cvs), c = cvs.getContext('2d'), W = cvs.width, H = cvs.height;
+  c.clearRect(0, 0, W, H);
+  const routes = PL.names.map(n => scenes[sceneIndex(n)]);
+  const vmax = Math.max(20, Math.ceil(Math.max(0, ...routes.flatMap(sc => sc.route.map(p => p[3]))) / 10) * 10);
+  const L = 34 * dpr, R = 8 * dpr, T = 6 * dpr, B = 16 * dpr;
+  const X = s => L + s / 20 * (W - L - R), Y = v => H - B - v / vmax * (H - T - B);
+  c.font = `${10 * dpr}px system-ui`; c.fillStyle = '#898781'; c.strokeStyle = '#2c2c2a'; c.lineWidth = dpr;
+  for (let v = 0; v <= vmax; v += vmax > 40 ? 20 : 10) { c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke(); c.fillText(String(v), 4 * dpr, Y(v) + 3 * dpr); }
+  for (let s = 0; s <= 20; s += 5) c.fillText(s + 's', X(s) - 6 * dpr, H - 3 * dpr);
+  c.fillText('km/h', 4 * dpr, T + 8 * dpr);
+  routes.forEach((sc, k) => {
+    if (!sc.route.length) return;
+    c.strokeStyle = (PL.tiles[k] || {}).color || '#3987e5'; c.lineWidth = (k === 0 ? 2.5 : 1.8) * dpr;
+    c.beginPath();
+    sc.route.forEach((p, j) => { const x = X((p[2] - sc.sample_ts[0]) / 1e6), y = Y(p[3]); j ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.stroke();
+  });
+  c.strokeStyle = '#fff'; c.lineWidth = 1.5 * dpr; c.beginPath(); c.moveTo(X(t), T); c.lineTo(X(t), H - B); c.stroke();
+}
+
+// ---------- distribution dashboard (전체 vs 유지, stacked by selection state) ----------
+let distTable = false;
+const DIST_NUM = [
+  { key: 'v_mean_kmh', title: '평균 속도', unit: 'km/h', edges: [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50] },
+  { key: 'stop_frac', title: '정차 비율', unit: '%', mul: 100, edges: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] },
+  { key: 'min_ax', title: '최대 감속 (1초 평균 종가속도 최솟값)', unit: 'm/s²', edges: [-3, -2.5, -2, -1.5, -1, -0.5, 0] },
+  { key: 'max_ay', title: '최대 횡가속 (1초 평균)', unit: 'm/s²', edges: [0, 0.5, 1, 1.5, 2, 2.5, 3] },
+  { key: 'net_turn', title: '순 회전량 (좌 +, 우 −)', unit: '°', edges: [-180, -120, -60, -20, 20, 60, 120, 180] },
+  { key: 'bearing', title: '진행 방향 (북 = 0°, 시계 방향)', unit: '°', edges: [0, 45, 90, 135, 180, 225, 270, 315, 360],
+    names: ['N–NE', 'NE–E', 'E–SE', 'SE–S', 'S–SW', 'SW–W', 'W–NW', 'NW–N'] },
+  { key: 'lidar_cells', title: 'LiDAR 주변 변화량 (칸/쌍, 정차 scene에서만 신뢰)', unit: '', edges: [0, 50, 100, 200, 300, 400, 500, 700, 1000] },
+  { key: 'risk', title: '위험 점수 (0 = 이벤트 없음)', unit: '', edges: [0, 0.001, 1, 2, 3, 6], names: ['없음', '<1', '1–2', '2–3', '3+'] },
+  { key: 'start', title: '촬영 시각 (scene 시작)', unit: '', edges: null },
+];
+function distValue(n, v) {
+  const s = selOf(n), i = sceneIndex(n);
+  if (v.key === 'risk') return (riskOf(n) || { score: 0 }).score;
+  if (v.key === 'start') return scenes[i].sample_ts[0] / 1e6;
+  const x = s[v.key];
+  return x == null ? null : x * (v.mul || 1);
+}
+const DSER = [['keep', 'var(--c-keep)', '유지'], ['s1', 'var(--c-s1)', '삭제 · 중복'], ['s2', 'var(--c-s2)', '삭제 · 수량 조정']];
+const foldState = st => st === 'must' || st === 'review' ? 'keep' : st;
+function tipShow(e, html) { const t = $('vizTip'); t.innerHTML = html; t.hidden = false; t.style.left = Math.min(e.clientX + 14, innerWidth - 330) + 'px'; t.style.top = (e.clientY + 14) + 'px'; }
+function tipHide() { $('vizTip').hidden = true; }
+function stackedBars(bins, labels, W = 330, H = 150) {
+  // bins: [{keep:[names], s1:[...], s2:[...]}] -> SVG vertical stacked histogram
+  const L = 26, R = 6, T = 8, B = 30, n = bins.length, bw = (W - L - R) / n;
+  const tot = bins.map(b => b.keep.length + b.s1.length + b.s2.length), ymax = Math.max(2, ...tot);
+  const Y = v => H - B - v / ymax * (H - T - B);
+  let g = '';
+  for (const v of [0, Math.ceil(ymax / 2), ymax]) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#2c2c2a"/><text x="${L - 4}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`;
+  bins.forEach((b, k) => {
+    let y0 = 0;
+    const x = L + k * bw + 2, w = Math.max(2, bw - 4);
+    for (const [key, col] of DSER) {
+      const c = b[key].length; if (!c) continue;
+      const y1 = y0 + c, top = Y(y1), h = Y(y0) - Y(y1);
+      g += `<rect x="${x}" y="${top + 1}" width="${w}" height="${Math.max(1, h - 2)}" rx="2" fill="${col}"/>`;
+      y0 = y1;
+    }
+    if (tot[k]) g += `<text x="${x + w / 2}" y="${Y(tot[k]) - 3}" text-anchor="middle" fill="#c3c2b7">${tot[k]}</text>`;
+    const lab = labels[k];
+    if (n <= 8 || k % 2 === 0) g += `<text x="${x + w / 2}" y="${H - B + 12}" text-anchor="middle">${lab}</text>`;
+    g += `<rect class="hit" data-bin="${k}" x="${L + k * bw}" y="${T}" width="${bw}" height="${H - T - B + 14}"/>`;
+  });
+  g += `<line x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}" stroke="#383835"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function hbarChart(rows, W = 330) {
+  // rows: [{label, keep:[], s1:[], s2:[]}] -> horizontal stacked bars
+  const L = 118, R = 26, rowH = 18, H = rows.length * rowH + 6, tmax = Math.max(1, ...rows.map(r => r.keep.length + r.s1.length + r.s2.length));
+  const X = v => L + v / tmax * (W - L - R);
+  let g = '';
+  rows.forEach((r, k) => {
+    const y = 3 + k * rowH; let x0 = 0;
+    g += `<text x="${L - 6}" y="${y + 12}" text-anchor="end" fill="#c3c2b7">${esc(r.label)}</text>`;
+    for (const [key, col] of DSER) {
+      const c = r[key].length; if (!c) continue;
+      g += `<rect x="${X(x0) + 1}" y="${y + 2}" width="${Math.max(1, X(x0 + c) - X(x0) - 2)}" height="${rowH - 6}" rx="2" fill="${col}"/>`;
+      x0 += c;
+    }
+    g += `<text x="${X(x0) + 4}" y="${y + 12}">${x0}</text>`;
+    g += `<rect class="hit" data-bin="${k}" x="0" y="${y}" width="${W}" height="${rowH}"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function binScenes(names, valueOf, edges) {
+  const bins = edges.slice(0, -1).map(() => ({ keep: [], s1: [], s2: [] }));
+  for (const n of names) {
+    const v = valueOf(n); if (v == null || !isFinite(v)) continue;
+    let k = edges.findIndex((e, j) => j < edges.length - 1 && v >= e && v < edges[j + 1]);
+    if (k < 0) k = v < edges[0] ? 0 : bins.length - 1;
+    bins[k][foldState(sceneState(n))].push(n);
+  }
+  return bins;
+}
+function tipList(title, b) {
+  const all = [...b.keep, ...b.s1, ...b.s2];
+  return `<b>${esc(title)}</b> · ${all.length}개<br>` + DSER.map(([key, col, lab]) => b[key].length
+    ? `<span style="color:${col}">■</span> ${lab} ${b[key].length}: ${b[key].map(x => x.slice(-4)).join(', ')}` : '').filter(Boolean).join('<br>');
+}
+function renderDist() {
+  if (!scenes.length) return;
+  const names = scenes.map(s => s.name), kept = names.filter(n => !isDel(sceneState(n)));
+  const cnt = st => names.filter(n => sceneState(n) === st).length, n1 = cnt('s1'), n2 = cnt('s2');
+  $('distSummary').textContent = `전체 ${names.length}개 → 유지 ${kept.length}개 (삭제 ${n1 + n2}: 중복 ${n1} · 수량 조정 ${n2}) · 평균은 "전체 → 유지"`;
+  $('distMode').textContent = distTable ? '차트로 보기' : '표로 보기';
+  $('distGrid').hidden = distTable; $('distTableWrap').hidden = !distTable;
+  if (distTable) return renderDistTable(names);
+  const cards = [], handlers = [];
+  const mean = (arr, f) => { const v = arr.map(f).filter(x => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; };
+  for (const v of DIST_NUM) {
+    let edges = v.edges, labels, fmtTitle;
+    if (v.key === 'start') {   // 5-minute bins over the recording time
+      const ts = names.map(n => distValue(n, v)), t0 = Math.floor(Math.min(...ts) / 300) * 300, t1 = Math.ceil((Math.max(...ts) + 1) / 300) * 300;
+      edges = []; for (let t = t0; t <= t1; t += 300) edges.push(t);
+      const hm = t => new Date(t * 1000).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      labels = edges.slice(0, -1).map(hm); fmtTitle = k => `${hm(edges[k])}–${hm(edges[k + 1])}`;
+    } else {
+      labels = v.names || edges.slice(0, -1).map(e => String(e));
+      fmtTitle = k => v.names ? v.names[k] : `${edges[k]}–${edges[k + 1]} ${v.unit}`;
+    }
+    const bins = binScenes(names, n => distValue(n, v), edges);
+    const mAll = mean(names, n => distValue(n, v)), mKeep = mean(kept, n => distValue(n, v));
+    const sub = v.key === 'start' || v.key === 'bearing' ? '' : `평균 ${mAll.toFixed(v.key === 'stop_frac' || v.key === 'lidar_cells' ? 0 : 1)} → ${mKeep.toFixed(v.key === 'stop_frac' || v.key === 'lidar_cells' ? 0 : 1)} ${v.unit}`;
+    const id = 'd_' + v.key;
+    cards.push(`<div class="chart" id="${id}"><h4>${esc(v.title)}</h4><div class="sub">${sub}&nbsp;</div>${stackedBars(bins, labels)}</div>`);
+    handlers.push([id, bins, k => `${v.title}: ${fmtTitle(k)}`]);
+  }
+  // categorical: situation group, route, condition
+  const cat = (title, keyOf) => {
+    const keys = [...new Set(names.map(keyOf))].sort();
+    const rows = keys.map(k => { const r = { label: k, keep: [], s1: [], s2: [] }; for (const n of names) if (keyOf(n) === k) { r[foldState(sceneState(n))].push(n); } return r; });
+    const id = 'd_' + cards.length;
+    cards.push(`<div class="chart" id="${id}"><h4>${esc(title)}</h4><div class="sub">막대 = scene 수 (유지 + 삭제)</div>${hbarChart(rows)}</div>`);
+    handlers.push([id, rows, k => `${title}: ${rows[k].label}`]);
+  };
+  cat('상황 그룹 (조건 · 주행 행동)', n => selOf(n).group_label || '?');
+  cat('route', n => shortLog(scenes[sceneIndex(n)].log));
+  cat('조건 (CLIP 제로샷: 주간/야간 · 맑음/비)', n => { const c = selOf(n).cond || {}; return `${c.light === 'night' ? '야간' : '주간'} · ${c.weather === 'rain' ? '비' : '맑음'}`; });
+  // position: scene centres on the map, coloured by state
+  cards.push(`<div class="chart" id="d_pos" style="grid-column: span 2"><h4>위치 (scene 중심, UTM)</h4><div class="sub">점 = scene 중심, 선 = 주행 경로</div>${positionMap(names)}</div>`);
+  $('distGrid').innerHTML = cards.join('');
+  for (const [id, bins, title] of handlers) {
+    const el = $(id);
+    el.onmousemove = e => { const h = e.target.closest('.hit'); if (h) tipShow(e, tipList(title(+h.dataset.bin), bins[+h.dataset.bin])); else tipHide(); };
+    el.onmouseleave = tipHide;
+  }
+  const pm = $('d_pos');
+  pm.onmousemove = e => { const d = e.target.closest('[data-scene]'); if (d) { const n = d.dataset.scene; tipShow(e, `<b>${n}</b> · ${shortLog(scenes[sceneIndex(n)].log)} · ${STATE_INFO[sceneState(n)][0]}<br>${esc(selOf(n).group_label || '')}`); } else tipHide(); };
+  pm.onmouseleave = tipHide;
+  pm.onclick = e => { const d = e.target.closest('[data-scene]'); if (d) { tipHide(); setNav('all'); go(sceneIndex(d.dataset.scene), 0); } };
+}
+function positionMap(names) {
+  const W = 680, H = 300, pad = 16;
+  const pts = scenes.flatMap(s => s.route.map(p => [p[0], p[1]]));
+  let x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
+  const s = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - 2 * pad) / (y1 - y0 || 1));
+  const X = x => pad + (x - x0) * s + ((W - 2 * pad) - (x1 - x0) * s) / 2, Y = y => H - pad - (y - y0) * s - ((H - 2 * pad) - (y1 - y0) * s) / 2;
+  let g = scenes.map(sc => sc.route.length ? `<polyline fill="none" stroke="#383835" stroke-width="2" points="${sc.route.filter((p, k) => k % 3 === 0).map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}"/>` : '').join('');
+  const order = [...names].sort((a, b) => STATE_ORDER.indexOf(sceneState(b)) - STATE_ORDER.indexOf(sceneState(a)));   // deleted on top
+  for (const n of order) {
+    const c = centroids[sceneIndex(n)]; if (!c) continue;
+    g += `<circle data-scene="${n}" cx="${X(c[0]).toFixed(1)}" cy="${Y(c[1]).toFixed(1)}" r="5" fill="${STATE_INFO[sceneState(n)][1]}" stroke="#15181d" stroke-width="2" style="cursor:pointer"/>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function renderDistTable(names) {
+  const cols = [['scene', n => n.slice(-4)], ['route', n => shortLog(scenes[sceneIndex(n)].log)], ['상태', n => STATE_INFO[sceneState(n)][0]],
+    ['상황 그룹', n => selOf(n).group_label || ''], ['평균 km/h', n => (selOf(n).v_mean_kmh ?? NaN).toFixed(1)],
+    ['정차 %', n => ((selOf(n).stop_frac ?? NaN) * 100).toFixed(0)], ['최대 감속', n => (selOf(n).min_ax ?? NaN).toFixed(2)],
+    ['최대 횡가속', n => (selOf(n).max_ay ?? NaN).toFixed(2)], ['순 회전°', n => (selOf(n).net_turn ?? NaN).toFixed(0)],
+    ['진행 방향°', n => (selOf(n).bearing ?? NaN).toFixed(0)], ['LiDAR 변화', n => (selOf(n).lidar_cells ?? NaN).toFixed(0)],
+    ['위험 점수', n => ((riskOf(n) || { score: 0 }).score).toFixed(2)]];
+  $('distTable').innerHTML = `<thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead><tbody>`
+    + names.map(n => `<tr data-scene="${n}">${cols.map(([h, f], k) => `<td${k < 4 ? ' class="l"' : ''}>${esc(f(n))}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+$('distMode').onclick = () => { distTable = !distTable; renderDist(); };
+$('distTable').onclick = e => { const r = e.target.closest('[data-scene]'); if (r) { setNav('all'); go(sceneIndex(r.dataset.scene), 0); } };
+
+// ---------- side tabs ----------
+function showTab(t) {
+  if (!document.querySelector(`#egoPanel .pane[data-pane="${t}"]`)) return;
+  document.querySelectorAll('#sideTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('#egoPanel .pane').forEach(p => { p.hidden = p.dataset.pane !== t; });
+  if (t === 'ego') drawSpeed();
+  if (t === 'sel') renderSelection();
+  try { localStorage.setItem('viewer.tab', t); } catch (e) {}
+}
+document.querySelectorAll('#sideTabs button').forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
+
+// ---------- human duplicate labels (selection/human_labels.json, saved through the server) ----------
+function sceneDist(a, b) {
+  const p = centroids[a], q = centroids[b];
+  return p && q ? Math.hypot(p[0] - q[0], p[1] - q[1]) : Infinity;
+}
+const fmtDist = d => !isFinite(d) ? '?' : d < 1000 ? `${d.toFixed(0)} m` : `${(d / 1000).toFixed(1)} km`;
+function nearestScene(si) {
+  let best = null, bd = Infinity;
+  scenes.forEach((s, i) => { if (i !== si && sceneDist(si, i) < bd) { bd = sceneDist(si, i); best = s.name; } });
+  return best;
+}
+function sceneOptions(si, selected, blank) {   // other scenes, nearest (GPS centre) first
+  const order = scenes.map((s, i) => i).filter(i => i !== si).sort((a, b) => sceneDist(si, a) - sceneDist(si, b));
+  return (blank ? `<option value="">${blank}</option>` : '') + order.map(i =>
+    `<option value="${scenes[i].name}"${scenes[i].name === selected ? ' selected' : ''}>${scenes[i].name} · ${shortLog(scenes[i].log)} · ${fmtDist(sceneDist(si, i))}</option>`).join('');
+}
+async function loadLabels() {
+  try { labels = (await (await fetch('/api/labels')).json()).labels || {}; } catch (e) { labels = {}; }
+}
+function renderLabel() {
+  const sc = scenes[sceneIdx], L = labels[sc.name] || {};
+  $('lblScene').textContent = `${sc.name} · ${shortLog(sc.log)}`;
+  document.querySelectorAll('input[name=lbl]').forEach(r => { r.checked = r.value === L.label; });
+  $('dupOf').innerHTML = sceneOptions(sceneIdx, L.dup_of, '(가까운 순)');
+  $('lblNote').value = L.note || '';
+  updateLabelStatus();
+}
+let lastSaved = '', saveTimer = null;
+function updateLabelStatus(err) {
+  const vals = Object.values(labels).filter(v => v.label), L = labels[scenes[sceneIdx].name] || {};
+  let s = `라벨 ${vals.length}/${scenes.length} · 중복 ${vals.filter(v => v.label === 'duplicate').length}`;
+  if (lastSaved) s += ` · 저장 ${lastSaved}`;
+  if (L.label === 'duplicate' && !L.dup_of) s += ' · ⚠ 대신할 scene을 고르세요';
+  $('lblStatus').textContent = err ? `저장 실패: ${err}` : s;
+}
+function saveLabel() {
+  const sc = scenes[sceneIdx];
+  const label = (document.querySelector('input[name=lbl]:checked') || {}).value || '';
+  const body = { scene: sc.name, label, dup_of: label === 'duplicate' ? ($('dupOf').value || null) : null, note: $('lblNote').value };
+  return fetch('/api/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(d => {
+      labels = d.labels || {};
+      lastSaved = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+      updateLabelStatus(); renderSelection(); drawRoute();
+    })
+    .catch(e => updateLabelStatus(e.message));
+}
+function flushLabelSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; saveLabel(); } }
+document.querySelectorAll('input[name=lbl]').forEach(r => { r.onchange = saveLabel; });
+$('dupOf').onchange = () => {
+  // picking a stand-in scene implies "duplicate"
+  if ($('dupOf').value) document.querySelector('input[name=lbl][value=duplicate]').checked = true;
+  saveLabel();
+};
+$('lblNote').oninput = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = null; saveLabel(); }, 600); };
+$('lblClear').onclick = () => {
+  document.querySelectorAll('input[name=lbl]').forEach(r => { r.checked = false; });
+  $('dupOf').value = ''; $('lblNote').value = ''; saveLabel();
+};
+$('lblNext').onclick = () => {
+  for (let k = 1; k <= scenes.length; k++) {
+    const i = (sceneIdx + k) % scenes.length;
+    if (!(labels[scenes[i].name] || {}).label) return go(i, 0);
+  }
+};
+$('lblCmp').onclick = () => openCompare(scenes[sceneIdx].name, $('dupOf').value || nearestScene(sceneIdx));
+
+// ---------- scene_select.py result ----------
+async function loadSelection() {
+  try { selection = await (await fetch('/api/selection')).json(); } catch (e) { selection = { missing: true }; }
+  STATE_INFO.s1[0] = stopsMode() ? '삭제 · 정지 중복' : '삭제 · 중복';
+  DSER[1][2] = STATE_INFO.s1[0];
+  syncOverlayLegend(); renderSelection(); renderNav(); updateSceneSel(); drawRoute(); if (navTab === 'dist') renderDist();
+}
+function syncOverlayLegend() { $('routeLegend').querySelectorAll('.ovl').forEach(el => { el.hidden = !overlayOn(); }); }
+$('selReload').onclick = loadSelection;
+$('selOverlay').onchange = () => { syncOverlayLegend(); drawRoute(); };
+
+function agreementText() {   // live comparison with the current human labels
+  const S = selection.scenes;
+  const lab = Object.entries(labels).filter(([k, v]) => v.label && S[k]);
+  if (!lab.length) return '사람 라벨 없음 — 중복 라벨 탭에서 표시하면 여기서 바로 비교됩니다.';
+  const hum = new Set(lab.filter(([, v]) => v.label === 'duplicate').map(([k]) => k));
+  const alg = new Set(lab.filter(([k]) => S[k].status === 'remove').map(([k]) => k));
+  const tp = [...alg].filter(k => hum.has(k)), fp = [...alg].filter(k => !hum.has(k)), fn = [...hum].filter(k => !alg.has(k));
+  const P = alg.size ? tp.length / alg.size : null, R = hum.size ? tp.length / hum.size : null;
+  const f = v => v == null ? '–' : v.toFixed(2), sh = a => a.length ? a.map(n => n.slice(-4)).join(', ') : '없음';
+  const mk = lab.filter(([k, v]) => v.label === 'must_keep' && S[k].status === 'remove').map(([k]) => k);
+  return `사람 라벨 ${lab.length}개 기준: precision ${f(P)} · recall ${f(R)}\n알고리즘만 제거(FP): ${sh(fp)}\n사람만 중복(FN): ${sh(fn)}`
+    + (mk.length ? `\n⚠ 사람이 필수 유지로 표시했는데 제거: ${sh(mk)}` : '');
+}
+function renderSelection() {
+  if (!selection || !scenes.length) return;
+  if (selection.missing) {
+    $('selSummary').innerHTML = '결과 없음. 터미널에서 <span class="mono">python tools/scene_select.py</span> 실행 후 "다시 읽기".';
+    $('selAgree').textContent = ''; $('selList').innerHTML = ''; return;
+  }
+  if (selection.mode === 'route_quota') return renderRouteQuota();
+  if (selection.mode === 'stops') return renderStops();
+  const S = selection.scenes, P = selection.params, names = Object.keys(S);
+  const rm = names.filter(n => S[n].status === 'remove'), mk = names.filter(n => S[n].status === 'must_keep');
+  $('selSummary').innerHTML =
+    `<b>${selection.mode === 'budget' ? `예산 모드 (유지 ${names.length - rm.length}/${names.length})` : '임계값 모드'}</b> · 제거 <b class="st-remove">${rm.length}</b> · 필수 유지 ${mk.length}` +
+    `<br><span class="muted">장소 ≤${P.place_m} m · 방향 ≤${P.heading_deg}° · ego τ ${P.ego_tau} · LiDAR 비율 ≤${P.lidar_ratio}, cos ≥${P.lidar_cos} (정차 scene끼리만) · ${selection.created}</span>`;
+  $('selAgree').style.whiteSpace = 'pre-line';
+  $('selAgree').textContent = agreementText();
+  const curName = scenes[sceneIdx].name, cs = S[curName];
+  const link = n => `<a data-go="${n}">${n.slice(-4)}</a>`;
+  let html = cs ? `<div class="it">현재 ${link(curName)}: <span class="st-${cs.status}">${STATUS_KO[cs.status]}</span>`
+    + `${cs.substitute ? ` → ${link(cs.substitute)}` : ''} <span class="muted">${cs.tags.join(', ')}</span></div>` : '';
+  html += '<div class="muted small" style="margin-top:4px">제거 → 대신하는 scene (c = 대체 비용)</div>';
+  html += rm.map(n => `<div class="it"><span class="st-remove">●</span>${link(n)} → ${link(S[n].substitute)}`
+    + ` <span class="muted">c ${S[n].cost.toFixed(2)}</span>${S[n].forced ? '<span class="badge" title="중복이 아니지만 예산 때문에 제거">예산</span>' : ''}`
+    + `<button data-cmp="${n},${S[n].substitute}">비교</button></div>`).join('') || '<div class="muted">없음</div>';
+  html += `<div class="muted small" style="margin-top:4px">필수 유지: ${mk.map(n => `${link(n)}<span class="muted">(${S[n].tags.filter(t => (P.must_keep || []).includes(t)).join(',')})</span>`).join(' ')}</div>`;
+  $('selList').innerHTML = html;
+}
+function renderStops() {   // tools/curate.py --mode stops
+  const S = selection.scenes, link = n => `<a data-go="${n}">${n.slice(-4)}</a>`;
+  $('selSummary').innerHTML = `<b>정지만 정리</b> · 제거 <b class="st-remove">${selection.n_removed}</b> / ${selection.n_scenes}`
+    + `<br><span class="muted">같은 장소에 멈춘 scene 그룹마다 LiDAR diff가 가장 큰 1개만 남김 · 다른 삭제 없음 · ${selection.created}</span>`
+    + selection.routes.map(r => `<div class="small">${shortLog(r.log)}: ${r.n}개 → 삭제 ${r.stage1.length} · 정지 그룹 `
+      + ((r.stage1_groups || []).map(g => '[' + g.map(m => m.slice(-4)).join(', ') + ']').join(' ') || '없음') + '</div>').join('');
+  $('selAgree').style.whiteSpace = 'pre-line';
+  $('selAgree').textContent = agreementText();
+  const rm = Object.keys(S).filter(n => S[n].status === 'remove').sort();
+  $('selList').innerHTML = '<div class="muted small" style="margin-top:4px">제거 → 남긴 scene (LiDAR diff)</div>'
+    + (rm.map(n => `<div class="it"><span style="color:var(--c-s1)">●</span>${link(n)} → ${link(S[n].substitute)}`
+      + ` <span class="muted">${S[n].lidar_cells.toFixed(0)} → ${S[S[n].substitute].lidar_cells.toFixed(0)}</span>`
+      + `<button data-cmp="${n},${S[n].substitute}">비교</button></div>`).join('') || '<div class="muted">없음</div>');
+}
+function renderRouteQuota() {   // tools/curate.py: every route keeps 2/3, deletes 1/3 (stage 1 local, stage 2 vs corpus)
+  const S = selection.scenes, P = selection.params, link = n => `<a data-go="${n}">${n.slice(-4)}</a>`;
+  const how = `상황 그룹 γ=${P.gamma} · 그룹 안 교통 유형 유지 · 최소 보유 ${P.min_hold}/${P.min_hold_event}(이벤트)`;
+  $('selSummary').innerHTML = `<b>route별 1/3 삭제</b> · 제거 <b class="st-remove">${selection.n_removed}</b> / ${selection.n_scenes}`
+    + ` · 검토 ${(selection.review || []).length} · 충돌 ${(selection.conflicts || []).length}`
+    + `<br><span class="muted">1단계 중복: 같은 장소·같은 상태, 정차면 사건 종류까지 대표가 포함 · 2단계 수량 조정: ${how} · ${selection.created}</span>`
+    + selection.routes.map(r => r.fixed ? `<div class="small">${shortLog(r.log)}: ${r.n}개 · 누적 데이터로 고정 (삭제 없음)</div>` : `<div class="small">${shortLog(r.log)}: ${r.n}개 → 삭제 ${r.quota} (중복 ${r.stage1.length} · 수량 ${r.stage2.length}${(r.review || []).length ? ' · 검토 ' + r.review.length : ''}${r.conflict ? ' · 충돌' : ''})`
+      + ` <span class="muted">이월 ${r.carry_in.toFixed(2)}→${r.carry_out.toFixed(2)}</span>${r.notes.length ? ' ⚠ ' + r.notes.join('; ') : ''}</div>`).join('');
+  $('selAgree').style.whiteSpace = 'pre-line';
+  $('selAgree').textContent = agreementText();
+  const curName = scenes[sceneIdx].name, cs = S[curName];
+  let html = cs ? `<div class="it" style="display:block">현재 ${link(curName)}: <span class="st-${cs.status}">${STATUS_KO[cs.status]}${cs.kind ? ` (${cs.kind})` : cs.review ? ' (검토 대기)' : ''}</span>`
+    + ` <span class="muted">${cs.group}</span>${cs.reason ? `<br><span class="muted small">${cs.reason}</span>` : ''}</div>` : '';
+  html += '<div class="muted small" style="margin-top:4px">상황 그룹: 1단계 후 입력 → 유지</div>';
+  html += Object.entries(selection.groups).map(([g, v]) => `<div class="small">${esc(v.label || g)} <b>${v.seen} → ${v.retained}</b></div>`).join('');
+  const cov = selection.coverage;
+  if (cov) html += `<div class="muted small" style="margin-top:4px">분포 확인: 사라진 상황 유형 ${cov.lost_types.length ? cov.lost_types.map(esc).join(', ') : '없음'}`
+    + ` · 정차 사건 ${cov.stops.map(x => `[${x.group.map(m => m.slice(-4)).join(',')}] ${x.lost.length ? '손실 ' + x.lost.join(',') : '유지'}`).join(' · ')}</div>`;
+  html += '<div class="muted small" style="margin-top:4px">제거 (→ 근거 scene)</div>';
+  const rm = Object.keys(S).filter(n => S[n].status === 'remove').sort((a, b) => S[a].stage - S[b].stage || (a < b ? -1 : 1));
+  html += rm.map(n => `<div class="it" title="${S[n].reason.replace(/"/g, '&quot;')}"><span style="color:${S[n].stage === 2 ? 'var(--c-s2)' : 'var(--c-s1)'}">●</span>`
+    + `${link(n)}${S[n].substitute ? (subSimilar(S[n]) ? ' → ' : ' ≠ ') + link(S[n].substitute) : ''} <span class="muted">${S[n].kind || S[n].stage + '단계'} · ${S[n].group_label || S[n].group}</span>`
+    + (S[n].substitute ? `<button data-cmp="${n},${S[n].substitute}">비교</button>` : '') + `</div>`).join('') || '<div class="muted">없음</div>';
+  $('selList').innerHTML = html;
+}
+$('selList').onclick = e => {
+  const a = e.target.closest('[data-go]'), b = e.target.closest('[data-cmp]');
+  if (a) go(sceneIndex(a.dataset.go), 0);
+  if (b) { const [x, y] = b.dataset.cmp.split(','); openCompare(x, y); }
+};
+
+// ---------- side-by-side scene comparison (2 / 6 / 10 / 14 / 18 s) ----------
+const CMP_T = [2, 6, 10, 14, 18];
+let cmpReq = 0;
+function openCompare(a, b) {
+  if (sceneIndex(a) < 0) return;
+  $('cmpA').innerHTML = scenes.map(s => `<option value="${s.name}">${s.name} · ${shortLog(s.log)}</option>`).join('');
+  $('cmpA').value = a;
+  $('cmpB').innerHTML = sceneOptions(sceneIndex(a), b);
+  if (b && b !== a) $('cmpB').value = b;
+  if (!$('cmpCam').options.length)
+    $('cmpCam').innerHTML = ['CAM_FRONT', 'CAM_FRONT_LEFT', 'CAM_FRONT_RIGHT', 'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT', 'LIDAR_TOP']
+      .map(c => `<option value="${c}">${c === 'LIDAR_TOP' ? 'LIDAR (BEV, 위 = 전방)' : c}</option>`).join('');
+  $('cmp').hidden = false;
+  renderCompare();
+}
+$('cmpA').onchange = () => {
+  const b = $('cmpB').value;
+  $('cmpB').innerHTML = sceneOptions(sceneIndex($('cmpA').value), b);
+  renderCompare();
+};
+$('cmpB').onchange = renderCompare;
+$('cmpCam').onchange = renderCompare;
+$('cmpClose').onclick = () => { $('cmp').hidden = true; };
+
+// human "same situation?" judgement for the pair on screen (click the active answer again to clear it)
+let pairLabels = {};
+const pairKey = () => [$('cmpA').value, $('cmpB').value].sort().join('|');
+function showPairState() {
+  const v = pairLabels[pairKey()];
+  $('pairSame').classList.toggle('on', !!v && v.same === true);
+  $('pairDiff').classList.toggle('on', !!v && v.same === false);
+  const n = Object.keys(pairLabels).length;
+  $('pairState').textContent = `${v ? (v.same ? '같음으로 저장됨' : '다름으로 저장됨') : '미표시'} · 누적 ${n}쌍`;
+}
+async function savePair(same) {
+  const cur = pairLabels[pairKey()];
+  if (cur && cur.same === same) same = null;
+  try {
+    const r = await fetch('/api/pairs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ a: $('cmpA').value, b: $('cmpB').value, same }) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    pairLabels = (await r.json()).pairs || {};
+    showPairState();
+  } catch (e) { $('pairState').textContent = '저장 실패: ' + e.message; }
+}
+$('pairSame').onclick = () => savePair(true);
+$('pairDiff').onclick = () => savePair(false);
+fetch('/api/pairs').then(r => r.json()).then(d => { pairLabels = d.pairs || {}; }).catch(() => {});
+$('cmpGoA').onclick = () => { $('cmp').hidden = true; go(sceneIndex($('cmpA').value), 0); };
+$('cmpGoB').onclick = () => { $('cmp').hidden = true; go(sceneIndex($('cmpB').value), 0); };
+
+function pairText(i, j) {
+  if (!selection || selection.missing) return null;
+  const p = selection.pairs.find(q => q.i === i && q.j === j);
+  if (selection.mode === 'route_quota' || selection.mode === 'stops') return p ? p.text : null;
+  if (!p) return `${i.slice(-4)} ← ${j.slice(-4)}: 같은 장소·방향 아님 (대체 후보 아님)`;
+  return `${i.slice(-4)} ← ${j.slice(-4)}: 경로 커버 ${(p.cover * 100).toFixed(0)}% · 거리 ${p.place_med_m.toFixed(1)} m · 방향차 ${p.heading_med_deg.toFixed(0)}°`
+    + ` · ego ${p.ego_dist.toFixed(2)} · LiDAR ${p.lidar_note} → <b>${p.substitutable ? '대체 가능' : '대체 불가'}</b>`;
+}
+function sceneCard(name) {
+  const s = selection && !selection.missing ? selection.scenes[name] : null, L = labels[name];
+  const lines = [`<b>${name}</b> <span class="muted">${shortLog(scenes[sceneIndex(name)].log)}</span>`];
+  if (s) lines.push(s.group ? `${s.group} · ${s.v_mean_kmh.toFixed(1)} km/h` : `${s.tags.join(', ')} · ${s.v_mean_kmh.toFixed(1)} km/h`,
+    `LiDAR 변화 ${s.lidar_cells.toFixed(0)} · <span class="st-${s.status}">${STATUS_KO[s.status]}${s.stage ? ` ${s.stage}단계` : ''}</span>${s.substitute ? ' → ' + s.substitute.slice(-4) : ''}`);
+  if (L && L.label) lines.push(`사람: ${L.label === 'duplicate' ? '중복 → ' + (L.dup_of || '?').slice(-4) : STATUS_KO[L.label] || L.label}`);
+  return lines.join('<br>');
+}
+function renderCompare() {
+  const a = $('cmpA').value, b = $('cmpB').value, cam = $('cmpCam').value, my = ++cmpReq;
+  const ia = sceneIndex(a), ib = sceneIndex(b);
+  showPairState();
+  const info = [pairText(a, b), pairText(b, a)].filter(Boolean);
+  info.push(`GPS 중심 거리 ${fmtDist(sceneDist(ia, ib))}`);
+  $('cmpInfo').innerHTML = info.join('<br>');
+  const grid = $('cmpGrid');
+  grid.innerHTML = '<div></div>' + CMP_T.map(t => `<div class="hd">${t} s</div>`).join('');
+  const cells = [];
+  for (const [tag, name] of [['A', a], ['B', b]]) {
+    grid.insertAdjacentHTML('beforeend', `<div class="lab"><span class="muted">${tag}</span> ${sceneCard(name)}</div>`);
+    cells.push(CMP_T.map(() => grid.appendChild(document.createElement(cam === 'LIDAR_TOP' ? 'canvas' : 'img'))));
+  }
+  drawCmpSpeed(ia, ib);
+  [a, b].forEach((name, row) => {
+    const sc = scenes[sceneIndex(name)];
+    CMP_T.forEach(async (t, k) => {
+      const i = nearestIdxByTime(sc.sample_ts, sc.sample_ts[0] + t * 1e6, v => v);
+      const s = await cached('/api/sample/' + sc.samples[i], 'json');
+      const ch = s.channels[cam];
+      if (my !== cmpReq || !ch) return;
+      const el = cells[row][k];
+      if (cam !== 'LIDAR_TOP') { el.src = '/data/' + ch.filename; el.title = ch.filename; return; }
+      const buf = await cached('/data/' + ch.filename, 'bin');
+      if (my === cmpReq) drawBevThumb(el, buf);
+    });
+  });
+}
+function drawBevThumb(canvas, buf) {   // top-down ±40 m, x (forward) up, coloured by height
+  const dpr = sizeCanvas(canvas), W = canvas.width, H = canvas.height, c = canvas.getContext('2d');
+  const img = c.createImageData(W, H), px = new Uint32Array(img.data.buffer);
+  px.fill(0xff0a0807);
+  const P = new Float32Array(buf), n = Math.floor(P.length / 5), S = Math.min(W, H) / 80;
+  for (let i = 0; i < n; i++) {
+    const o = i * 5, x = P[o], y = P[o + 1];
+    const u = (W / 2 - y * S) | 0, v = (H / 2 - x * S) | 0;
+    if (u < 0 || v < 0 || u >= W || v >= H) continue;
+    px[v * W + u] = LUT[Math.max(0, Math.min(255, ((P[o + 2] + 2.2) / 4 * 255) | 0))];
+  }
+  c.putImageData(img, 0, 0);
+  c.strokeStyle = '#fff'; c.lineWidth = dpr; c.strokeRect(W / 2 - 0.95 * S, H / 2 - 2.3 * S, 1.9 * S, 4.6 * S);
+}
+function drawCmpSpeed(ia, ib) {
+  const cvs = $('cmpSpeed'), dpr = sizeCanvas(cvs), c = cvs.getContext('2d'), W = cvs.width, H = cvs.height;
+  c.clearRect(0, 0, W, H);
+  const A = scenes[ia].route, B = scenes[ib].route;
+  const vmax = Math.max(20, Math.ceil(Math.max(0, ...A.map(p => p[3]), ...B.map(p => p[3])) / 10) * 10);
+  const L = 34 * dpr, R = 8 * dpr, T = 6 * dpr, Bm = 16 * dpr;
+  const X = s => L + s / 20 * (W - L - R), Y = v => H - Bm - v / vmax * (H - T - Bm);
+  c.font = `${10 * dpr}px system-ui`; c.fillStyle = '#8a93a3'; c.strokeStyle = '#2a2f38'; c.lineWidth = dpr;
+  for (let v = 0; v <= vmax; v += vmax > 40 ? 20 : 10) {
+    c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke(); c.fillText(String(v), 4 * dpr, Y(v) + 3 * dpr);
+  }
+  for (const s of CMP_T) { c.fillText(s + 's', X(s) - 6 * dpr, H - 3 * dpr); c.beginPath(); c.moveTo(X(s), T); c.lineTo(X(s), H - Bm); c.stroke(); }
+  for (const [r, col] of [[A, '#4ea1ff'], [B, '#ffb547']]) {
+    if (!r.length) continue;
+    c.strokeStyle = col; c.lineWidth = 2 * dpr; c.beginPath();
+    r.forEach((p, i) => { const x = X((p[2] - r[0][2]) / 1e6), y = Y(p[3]); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.stroke();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!$('player').hidden) {
+    if (e.key === 'Escape') { plStop(); $('player').hidden = true; }
+    else if (e.key === ' ') { e.preventDefault(); plToggle(); }
+    return;
+  }
+  if (!$('cmp').hidden) { if (e.key === 'Escape') $('cmp').hidden = true; return; }
+  const tag = e.target.tagName;
+  if (tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'INPUT' && !['range', 'checkbox', 'radio'].includes(e.target.type)) return;
+  const k = e.key;
+  if (k === 'ArrowRight') go(sceneIdx, sampleIdx + 1);
+  else if (k === 'ArrowLeft') go(sceneIdx, sampleIdx - 1);
+  else if (k === 'ArrowDown') { const i = nextInList(1); if (i !== undefined) go(i, 0); }
+  else if (k === 'ArrowUp') { const i = nextInList(-1); if (i !== undefined) go(i, 0); }
+  else if (k === ' ') togglePlay();
+  else if (k === 'b' || k === 'B') setView('bev');
+  else if (k === '3') setView('3d');
+  else if (k === 'Escape') $('zoom').hidden = true;
+  else return;
+  e.preventDefault();
+});
+
+init().catch(e => { $('info').textContent = '초기화 실패: ' + e.message; });
+</script>
+</body>
+</html>

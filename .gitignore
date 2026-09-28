@@ -1,0 +1,8 @@
+# Only the code goes into git. The dataset (samples/, sweeps/, can_bus/, v1.0-trainval/, maps/, *.import.json,
+# ~70 GB), the review outputs (selection/) and the apply backups (_removed/) stay local.
+/*
+!/.gitignore
+!/README.md
+!/tools/
+__pycache__/
+*.pyc

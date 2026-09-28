@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tcar 검토</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --line: #2a2f38; --text: #e6e8ec; --muted: #8a93a3;
+          --del: #e8743b; --rep: #4ade80; --blue: #4ea1ff; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+               font: 13px/1.45 system-ui, 'Malgun Gothic', sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .muted { color: var(--muted); }
+  .del { color: var(--del); } .rep { color: var(--rep); }
+  button, select { background: #222733; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+                   padding: 4px 10px; cursor: pointer; font: inherit; }
+  button:hover, select:hover { border-color: #4b5361; }
+  button[hidden] { display: none; }
+  button.primary { background: #16324f; border-color: var(--blue); color: #cfe4ff; }
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel);
+           border-bottom: 1px solid var(--line); }
+  #title { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .chip { padding: 0 8px; border-radius: 10px; border: 1px solid currentColor; font-size: 12px; white-space: nowrap; }
+  .chip.prop { border-style: dashed; }
+  #slider { flex: 1; min-width: 80px; }
+  #autoLab { display: flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer; color: var(--muted); }
+  #autoLab:has(input:checked) { color: var(--blue); }
+  #full { color: var(--muted); font-size: 12px; text-decoration: none; white-space: nowrap; }
+  #full:hover { color: var(--text); }
+  main { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 0; }
+  /* left: review summary + scene list (kept scene with its deletion proposals as branches) */
+  #list { overflow: auto; border-right: 1px solid var(--line); padding: 4px 0 12px; }
+  #sum { margin: 6px 10px 4px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  #sum .line { display: flex; justify-content: space-between; gap: 6px; }
+  #sum .big { font-size: 15px; font-weight: 600; }
+  #sum .bar { height: 5px; margin: 6px 0 2px; border-radius: 3px; background: #2a2f38; overflow: hidden; }
+  #sum .bar i { display: block; height: 100%; background: var(--blue); }
+  #sum .go { width: 100%; margin-top: 8px; }
+  #sum .tog { display: flex; gap: 4px; margin-top: 6px; }
+  #sum .tog button { flex: 1; padding: 2px 0; font-size: 12px; }
+  #sum .tog button.on { border-color: var(--blue); color: var(--blue); }
+  #list .sec { padding: 10px 12px 4px; color: var(--muted); font-size: 12px; }
+  #list .row { display: flex; gap: 8px; align-items: baseline; padding: 4px 12px; cursor: pointer; }
+  #list .row:hover { background: #1c2029; }
+  #list .row.cur { background: #1f2a3a; box-shadow: inset 3px 0 var(--blue); }
+  #list .row b { font-family: ui-monospace, Consolas, monospace; }
+  #list .row .kind { flex: 1; color: var(--muted); }
+  #list .row.child { padding-left: 14px; }
+  #list .row .br { color: #4b5361; font-family: ui-monospace, Consolas, monospace; }
+  #list .row .gp { padding: 0 7px; font-size: 11px; line-height: 18px; }
+  .st { font-size: 12px; white-space: nowrap; }
+  .st.prop { color: var(--del); border: 1px dashed var(--del); border-radius: 8px; padding: 0 5px; }
+  .st.drop { color: var(--del); }
+  .st.keep { color: var(--rep); }
+  .st.rule { color: #7fb894; }
+  /* main view */
+  #view { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 8px; min-height: 0; }
+  #banner { display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 8px;
+            background: #2b1b12; border: 1px solid #5c3019; }
+  #banner.rep { background: #11261a; border-color: #1f4d2e; }
+  #banner[hidden] { display: none; }
+  #bannerText { flex: 1; }
+  #grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; min-height: 0; }
+  #left { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; min-height: 0; }
+  #cams { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  #cams figure { position: relative; margin: 0; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
+  #cams img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #cams figcaption { position: absolute; left: 6px; top: 4px; padding: 0 6px; border-radius: 4px; font-size: 11px;
+                     background: rgba(0, 0, 0, .55); }
+  canvas { display: block; width: 100%; background: #0a0c10; border-radius: 6px; }
+  #map { height: 100%; min-height: 120px; }
+  #right { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; min-height: 0; }
+  #lidar { height: 100%; cursor: grab; }
+  #lidar:active { cursor: grabbing; }
+  #stat, #lidarNote { color: var(--muted); font-size: 12px; }
+  /* review: the kept scene and its deletion proposals, side by side, decided per scene */
+  #rev { position: fixed; inset: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px;
+         padding: 12px; background: #08090c; }
+  #rev[hidden] { display: none; }
+  #rev .bar { display: flex; align-items: center; gap: 10px; }
+  #revTitle { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  #revSlider { flex: 1; min-width: 80px; }
+  #revTiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(0, 1fr); gap: 10px; min-height: 0; }
+  #revTiles figure { margin: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; min-height: 0;
+                     padding: 6px; border: 2px solid transparent; border-radius: 8px; }
+  #revTiles figure.drop { border-color: rgba(232, 116, 59, .55); }
+  #revTiles figure.keep { border-color: rgba(74, 222, 128, .45); }
+  #revTiles figcaption { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  #revTiles figcaption .sp { flex: 1; }
+  #revTiles img { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 6px; min-height: 0; }
+  #revTiles .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-height: 0; }
+  #revTiles .body.both { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #revTiles .body canvas { height: 100%; min-height: 0; cursor: grab; }
+  #revTiles .body.cam canvas, #revTiles .body.lid img { display: none; }
+  .dec { display: flex; gap: 4px; }
+  .dec button { padding: 3px 14px; font-weight: 600; }
+  .dec button.on.keep { background: #173d26; border-color: var(--rep); color: var(--rep); }
+  .dec button.on.drop { background: #3d2012; border-color: var(--del); color: var(--del); }
+  .dec button.on.auto { background: transparent; border-style: dashed; }
+  #revFoot { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+  #revFoot .sp { flex: 1; }
+  #revDone { color: var(--rep); font-weight: 600; }
+  button.danger { background: #3a1a10; border-color: var(--del); color: #ffc9b0; }
+  button:disabled { opacity: .5; cursor: default; }
+  /* 삭제 확정: plan first, then run */
+  #apply { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5, 6, 8, .82); }
+  #apply[hidden] { display: none; }
+  #apply .box { width: min(660px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; padding: 16px 18px;
+                background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  #apply h3 { margin: 0 0 10px; font-size: 16px; }
+  #apply .row { margin: 7px 0; }
+  #apply .warn { color: #ffb86b; }
+  #apply .names { margin-top: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
+  #apply .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <span id="title">…</span><span class="chip" id="chip"></span>
+  <button id="prevScene" title="이전 scene (↑)">◀</button><button id="nextScene" title="다음 scene (↓)">▶</button>
+  <button id="play" title="재생 / 멈춤 (Space)">▶ 재생</button>
+  <select id="speed" title="배속"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+  <label id="autoLab" title="scene이 끝나면 왼쪽 목록의 다음 scene을 이어서 재생, 마지막 다음에는 처음부터"><input type="checkbox" id="autoNext"> 이어서 재생</label>
+  <input type="range" id="slider" min="0" max="39" value="0" title="프레임 (← →)">
+  <span id="time" class="mono">0.0 s</span>
+  <a id="full" href="/full" title="이전의 자세한 뷰어 (분포, 위험, 라벨 등)">자세히 보기 ↗</a>
+</header>
+<main>
+  <nav id="list"></nav>
+  <section id="view">
+    <div id="banner" hidden><span id="bannerText"></span><button id="bannerBtn" class="primary"></button></div>
+    <div id="grid">
+      <div id="left">
+        <div id="cams"></div>
+        <canvas id="map"></canvas>
+        <div id="stat"></div>
+      </div>
+      <div id="right">
+        <canvas id="lidar"></canvas>
+        <div id="lidarNote">LiDAR 3D · 드래그 = 회전 · 오른쪽 드래그 = 이동 · 휠 = 확대/축소 · 더블클릭 = 처음 시점 · 원 간격 10 m · 색 = 높이</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="rev" hidden>
+  <div class="bar">
+    <span id="revTitle"></span>
+    <button id="revPrev" title="이전 그룹 (←)">◀ 이전</button><button id="revNext" title="다음 그룹 (→)">다음 ▶</button>
+    <button id="revPlay" title="재생 / 멈춤 (Space)">▶ 재생</button>
+    <select id="revSpeed" title="배속"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+    <input type="range" id="revSlider" min="0" max="20" step="0.1" value="0">
+    <span id="revTime" class="mono">0.0 s</span>
+    <select id="revCam" title="카메라"></select>
+    <button id="revClose">닫기 (Esc)</button>
+  </div>
+  <div id="revReason" class="muted"></div>
+  <div id="revTiles"></div>
+  <div id="revFoot">
+    <span>scene마다 <b>남기기 / 버리기</b>를 누르면 바로 저장됩니다 · 점선 = 아직 규칙 제안 그대로 · 같은 버튼을 다시 누르면 취소</span>
+    <span class="sp"></span><span id="revDone"></span>
+    <button id="revAccept" class="primary" title="아직 정하지 않은 scene을 규칙 제안대로 확정하고 다음 그룹으로 (A)">규칙대로 확정 → 다음</button>
+  </div>
+</div>
+
+<div id="apply" hidden>
+  <div class="box">
+    <h3>삭제 확정</h3>
+    <div id="applyBody"></div>
+    <div class="acts"><button id="applyCancel">취소</button><button id="applyRun" class="danger">실행 (되돌리기 가능)</button></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const CAMS = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'];
+const CAM_KO = { CAM_FRONT_LEFT: '앞 왼쪽', CAM_FRONT: '앞', CAM_FRONT_RIGHT: '앞 오른쪽',
+                 CAM_BACK_LEFT: '뒤 왼쪽', CAM_BACK: '뒤', CAM_BACK_RIGHT: '뒤 오른쪽' };
+const short = n => n.slice(-4);
+const routeOf = log => log.split('_')[0];
+
+let scenes = [], byName = {}, sel = null, human = {}, order = [], cur = { si: -1, i: 0 }, req = 0;
+let groupOf = {}, bounds = null, lastEgo = null, listView = 'all';
+try { listView = localStorage.getItem('simple.view') || 'all'; } catch (e) {}
+
+// ---------- data ----------
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error(r.status + ' ' + u); return r.json(); }
+const cache = new Map();
+function cached(u) {   // small LRU for sample JSON
+  if (cache.has(u)) { const p = cache.get(u); cache.delete(u); cache.set(u, p); return p; }
+  const p = getJSON(u);
+  cache.set(u, p);
+  if (cache.size > 60) cache.delete(cache.keys().next().value);
+  p.catch(() => cache.delete(u));
+  return p;
+}
+const S = n => (sel && !sel.missing && sel.scenes && sel.scenes[n]) || {};
+const diffOf = n => S(n).lidar_cells == null ? '?' : S(n).lidar_cells.toFixed(0);
+
+// ---------- decisions: the rule only proposes, a person decides; final = person's choice, else the proposal ----------
+const ruleDrop = n => S(n).status === 'remove';
+const humanOf = n => (human[n] && human[n].decision) || null;               // 'keep' | 'drop' | null
+const finalDrop = n => (humanOf(n) || (ruleDrop(n) ? 'drop' : 'keep')) === 'drop';
+const childrenOf = p => Object.keys((sel && sel.scenes) || {}).filter(m => ruleDrop(m) && S(m).substitute === p)
+  .sort((a, b) => (S(b).lidar_cells || 0) - (S(a).lidar_cells || 0));
+const isRuleRep = n => !ruleDrop(n) && childrenOf(n).length > 0;
+let GROUPS = [];                                  // review items: [kept scene, ...its deletion proposals]
+function buildGroups() {
+  const parents = [];
+  for (const s of scenes) {
+    const n = s.name;
+    if (ruleDrop(n)) { const p = S(n).substitute || n; if (!parents.includes(p)) parents.push(p); }
+  }
+  parents.sort((a, b) => order.indexOf(byName[a]) - order.indexOf(byName[b]));
+  GROUPS = parents.map(p => ruleDrop(p) ? [p] : [p, ...childrenOf(p)]);
+}
+const groupDone = g => g.every(n => humanOf(n));
+const groupIndexOf = n => GROUPS.findIndex(g => g.includes(n));
+function tag(n) {   // one short status per scene: the proposal until a person decides
+  const h = humanOf(n);
+  if (h === 'drop') return '<span class="st drop">버림 ✓</span>';
+  if (h === 'keep') return `<span class="st keep">남김 ✓</span>`;
+  if (ruleDrop(n)) return `<span class="st prop">삭제 제안</span>`;
+  if (isRuleRep(n)) return `<span class="st rule">남김 (규칙)</span>`;
+  return '';
+}
+async function decide(n, v, via = 'manual') {   // v: 'keep' | 'drop' | null (back to the proposal); logged in decisions_log.txt
+  const r = await fetch('/api/decisions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ scene: n, decision: v, via }) });
+  if (!r.ok) { alertLine('저장 실패: HTTP ' + r.status); return; }
+  human = (await r.json()).decisions || {};
+  refreshStatus();
+}
+function alertLine(t) { $('revDone').textContent = t; $('stat').textContent = t; }
+function refreshStatus() {
+  buildList();
+  if (cur.si >= 0) { header(scenes[cur.si]); banner(scenes[cur.si]); }
+  if (!$('rev').hidden) renderReviewState();
+}
+
+// ---------- left: summary + list ----------
+const pct = (a, b) => a ? `−${((1 - b / a) * 100).toFixed(1)}%` : '';
+const gb = v => (v / 1e9).toFixed(1) + ' GB';
+const sumBytes = ns => ns.reduce((a, n) => a + (S(n).bytes || 0), 0);
+function buildList() {
+  const logs = [], routeOrder = sel && sel.routes ? sel.routes.map(r => r.log) : [];
+  for (const s of scenes) if (!logs.includes(s.log)) logs.push(s.log);
+  logs.sort((a, b) => (routeOrder.indexOf(a) + 1 || 99) - (routeOrder.indexOf(b) + 1 || 99));
+  const all = scenes.map(s => s.name), kept = all.filter(n => !finalDrop(n));
+  const done = GROUPS.filter(groupDone).length, props = all.filter(ruleDrop).length, decided = Object.keys(human).length;
+  const next = GROUPS.findIndex(g => !groupDone(g));
+  let html = `<div id="sum">`
+    + `<div class="line"><span>검토 <b>${done} / ${GROUPS.length}</b> 그룹</span><span class="muted">결정 ${decided}개</span></div>`
+    + `<div class="bar"><i style="width:${GROUPS.length ? done / GROUPS.length * 100 : 100}%"></i></div>`
+    + `<div class="line big"><span>최종 삭제 ${all.length - kept.length} / ${all.length}</span><span class="del">${pct(all.length, kept.length)}</span></div>`
+    + `<div class="line muted"><span>용량 ${gb(sumBytes(all))} → ${gb(sumBytes(kept))}</span><span>${pct(sumBytes(all), sumBytes(kept))}</span></div>`
+    + `<div class="muted">규칙 제안 삭제 ${props}개${decided ? ' · 사람 결정 반영' : ' · 아직 사람 결정 없음'}</div>`
+    + (GROUPS.length ? `<button class="go primary" data-review="${next >= 0 ? next : 0}">${next >= 0 ? `▶ 검토 ${done ? '이어서' : '시작'} (남은 ${GROUPS.length - done} 그룹)` : '✓ 검토 완료 · 다시 보기'}</button>` : '')
+    + (all.length > kept.length ? `<button class="go danger" data-apply="1" title="최종 삭제 목록대로 데이터에서 scene을 빼고 이름을 당깁니다. 누르면 먼저 계획을 보여줍니다">삭제 확정 · ${all.length - kept.length}개 빼기</button>` : '')
+    + `<div class="tog"><button data-view="all"${listView === 'all' ? ' class="on"' : ''}>전체</button>`
+    + `<button data-view="del"${listView === 'del' ? ' class="on"' : ''}>검토 대상만</button></div></div>`;
+  order = [];
+  const row = (i, extra = '', br = '') => {
+    const n = scenes[i].name, kind = (S(n).group_label || '').split(' · ').pop();
+    order.push(i);
+    return `<div class="row${br ? ' child' : ''}${i === cur.si ? ' cur' : ''}" data-i="${i}">${br ? `<span class="br">${br}</span>` : ''}`
+      + `<b>${short(n)}</b><span class="kind">${kind}</span>${tag(n)}${extra}</div>`;
+  };
+  for (const lg of logs) {
+    const idx = scenes.map((s, i) => i).filter(i => scenes[i].log === lg);
+    const names = idx.map(i => scenes[i].name), nd = names.filter(finalDrop).length, np = names.filter(ruleDrop).length;
+    if (listView === 'del' && !np && !nd) continue;
+    const keptR = names.filter(n => !finalDrop(n));
+    html += `<div class="sec">${routeOf(lg)} · ${idx.length}개`
+      + (nd ? ` · 삭제 ${nd} <span class="del">${pct(names.length, keptR.length)}</span> · ${gb(sumBytes(names))} → ${gb(sumBytes(keptR))}` : '')
+      + '</div>';
+    for (const i of idx) {
+      const n = scenes[i].name, kids = childrenOf(n);
+      if (ruleDrop(n) && byName[S(n).substitute] !== undefined && scenes[byName[S(n).substitute]].log === lg) continue;   // under its kept scene
+      if (listView === 'del' && !kids.length && !ruleDrop(n) && !humanOf(n)) continue;
+      const gi = groupIndexOf(n);
+      html += row(i, gi >= 0 ? `<button class="gp" data-review="${gi}" title="이 그룹 검토: 나란히 재생하며 남기기 / 버리기">검토</button>` : '');
+      kids.forEach((c, k) => { html += row(byName[c], '', k === kids.length - 1 ? '└' : '├'); });
+    }
+  }
+  $('list').innerHTML = html;
+}
+$('list').onclick = e => {
+  const v = e.target.closest('[data-view]');
+  if (v) { listView = v.dataset.view; try { localStorage.setItem('simple.view', listView); } catch (err) {} return buildList(); }
+  const g = e.target.closest('[data-review]');
+  if (g) return openReview(+g.dataset.review);
+  if (e.target.closest('[data-apply]')) return openApply();
+  const r = e.target.closest('.row');
+  if (r) go(+r.dataset.i, 0);
+};
+
+// ---------- header + reason line ----------
+function header(sc) {
+  $('title').textContent = `${sc.name} · ${routeOf(sc.log)}`;
+  const n = sc.name, h = humanOf(n), chip = $('chip');
+  chip.textContent = h === 'drop' ? '버림 ✓' : h === 'keep' ? '남김 ✓' : ruleDrop(n) ? '삭제 제안' : isRuleRep(n) ? '남김 (규칙)' : '유지';
+  chip.className = 'chip ' + (h === 'drop' ? 'del' : h === 'keep' ? 'rep' : ruleDrop(n) ? 'del prop' : isRuleRep(n) ? 'rep prop' : 'muted');
+  document.querySelectorAll('#list .row').forEach(r => r.classList.toggle('cur', +r.dataset.i === cur.si));
+  const row = document.querySelector('#list .row.cur');
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+function ruleText(g) {   // why the rule proposes what it proposes, for one review group
+  const p = g[0], grp = groupOf[p] || g;
+  if (g.length === 1) return `규칙: 삭제 제안 · ${S(p).summary || ''}`;
+  const ranking = g.map(m => `${short(m)} ${diffOf(m)}`).join(' > ');
+  return sel.mode === 'stops'
+    ? `규칙: 같은 장소에 멈춘 scene [${grp.map(short).join(', ')}] 중 LiDAR diff가 가장 큰 ${short(p)}만 남기고 ${g.length - 1}개 삭제 제안 · diff ${ranking}`
+    : `규칙: ${S(g[1]).summary || ''}`;
+}
+function banner(sc) {
+  const n = sc.name, b = $('banner'), gi = groupIndexOf(n);
+  if (gi < 0 && !humanOf(n)) { b.hidden = true; return; }
+  const h = humanOf(n);
+  $('bannerText').textContent = (gi >= 0 ? ruleText(GROUPS[gi]) : '규칙 제안 없음')
+    + (h ? ` · 사람 결정: ${h === 'drop' ? '버림' : '남김'}` : '');
+  b.className = finalDrop(n) ? '' : 'rep';
+  const btn = $('bannerBtn');
+  btn.hidden = gi < 0;
+  btn.textContent = gi >= 0 ? `검토하기 (${GROUPS[gi].length}개 나란히)` : '';
+  btn.onclick = () => openReview(gi);
+  b.hidden = false;
+}
+
+// ---------- one sample: cameras, LiDAR, map (all change together) ----------
+const camImg = {};
+$('cams').innerHTML = CAMS.map(c => `<figure><img id="img_${c}" alt=""><figcaption>${CAM_KO[c]}</figcaption></figure>`).join('');
+CAMS.forEach(c => { camImg[c] = $('img_' + c); });
+function loadImg(fn) {
+  return new Promise(res => {
+    if (!fn) return res(null);
+    const im = new Image();
+    im.src = '/data/' + fn;
+    im.decode().then(() => res(im), () => res(null));
+  });
+}
+function swapCams(ims) {
+  CAMS.forEach((c, k) => { if (ims[k]) { ims[k].alt = ''; camImg[c].replaceWith(ims[k]); camImg[c] = ims[k]; } });
+}
+async function go(si, i) {
+  if (PLAY.on) stopPlay();
+  const sc = scenes[si];
+  if (!sc) return;
+  i = Math.max(0, Math.min(sc.samples.length - 1, i));
+  const changed = si !== cur.si;
+  cur = { si, i };
+  $('slider').max = sc.samples.length - 1; $('slider').value = i;
+  $('time').textContent = ((sc.sample_ts[i] - sc.sample_ts[0]) / 1e6).toFixed(1) + ' s';
+  history.replaceState(null, '', `#scene=${sc.name}&i=${i}`);
+  if (changed) { header(sc); banner(sc); }
+  const my = ++req;
+  let s;
+  try { s = await cached('/api/sample/' + sc.samples[i]); } catch (e) { $('stat').textContent = '불러오기 실패: ' + e.message; return; }
+  if (my !== req) return;
+  const lid = s.channels.LIDAR_TOP;
+  const [ims, xyz] = await Promise.all([Promise.all(CAMS.map(c => loadImg(s.channels[c] && s.channels[c].filename))),
+                                        lid ? lidBuf(lid.filename).catch(() => null) : null]);
+  if (my !== req) return;
+  swapCams(ims);
+  if (xyz) setLidar(xyz);
+  const e = s.ego_status;
+  lastEgo = e;
+  const clock = new Date(s.timestamp / 1000).toLocaleTimeString('ko-KR');
+  $('stat').textContent = e ? `${clock} · 속도 ${e.speed_kmh.toFixed(1)} km/h · 방위 ${(((90 - e.yaw_deg) % 360) + 360) % 360 | 0}° (북 = 0)` : clock;
+  drawMap();
+  const nx = sc.samples[i + 1];      // warm the next frame
+  if (nx) cached('/api/sample/' + nx).then(p => {
+    for (const c of CAMS) if (p.channels[c]) new Image().src = '/data/' + p.channels[c].filename;
+    if (p.channels.LIDAR_TOP) lidBuf(p.channels.LIDAR_TOP.filename).catch(() => {});
+  }).catch(() => {});
+}
+
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  return dpr;
+}
+const LUT = new Uint32Array(256);
+for (let k = 0; k < 256; k++) {     // turbo colormap (polynomial approximation)
+  const t = k / 255, cl = v => Math.max(0, Math.min(255, Math.round(v)));
+  const r = cl(34.61 + t * (1172.33 - t * (10793.56 - t * (33300.12 - t * (38394.49 - t * 14825.05)))));
+  const g = cl(23.31 + t * (557.33 + t * (1225.33 - t * (3574.96 - t * (1073.77 + t * 707.56)))));
+  const b = cl(27.2 + t * (3211.1 - t * (15327.97 - t * (27814 - t * (22569.18 - t * 6838.66)))));
+  LUT[k] = (255 << 24) | (b << 16) | (g << 8) | r;
+}
+
+// ---------- LiDAR: x, y, z only (server /lidar/: int16 cm, 1.25 MB per sweep instead of 4.2 MB) ----------
+const LID = { busy: false, k: -1, cache: new Map() };
+function lidBuf(fn) {   // -> Float32Array [x, y, z, x, y, z, ...]
+  if (LID.cache.has(fn)) return LID.cache.get(fn);
+  const p = fetch('/lidar/' + fn).then(r => {
+    if (r.ok) return r.arrayBuffer().then(b => { const q = new Int16Array(b), f = new Float32Array(q.length); for (let i = 0; i < q.length; i++) f[i] = q[i] * 0.01; return f; });
+    return fetch('/data/' + fn).then(r2 => r2.arrayBuffer()).then(b => {   // server without numpy: raw float32 x 5
+      const a = new Float32Array(b), n = Math.floor(a.length / 5), f = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { f[i * 3] = a[i * 5]; f[i * 3 + 1] = a[i * 5 + 1]; f[i * 3 + 2] = a[i * 5 + 2]; }
+      return f;
+    });
+  });
+  LID.cache.set(fn, p);
+  p.catch(() => LID.cache.delete(fn));
+  if (LID.cache.size > 24) LID.cache.delete(LID.cache.keys().next().value);
+  return p;
+}
+// 3D point view with a mouse orbit camera; one instance for the main view, one per review tile (tiles share a view)
+const VIEW0 = { yaw: Math.PI, pitch: 0.5, dist: 42, tx: 8, ty: 0, tz: -1.9 };   // behind and above the ego, looking forward
+const FOV = 50 * Math.PI / 180;
+function makeLidarView(cv, view, onViewChange, step = 1) {
+  const ctx = cv.getContext('2d');
+  const st = { pts: null, npts: 0, pcol: null, groundZ: -1.9, img: null, zb: null, pending: false };
+  const camera = (W, H) => {
+    const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+    const fx = -cp * Math.cos(view.yaw), fy = -cp * Math.sin(view.yaw), fz = -sp;
+    let rx = fy, ry = -fx; const rn = Math.hypot(rx, ry) || 1; rx /= rn; ry /= rn;
+    return { W, H, fx, fy, fz, rx, ry, ux: ry * fz, uy: -rx * fz, uz: rx * fy - ry * fx,
+             cx: view.tx - fx * view.dist, cy: view.ty - fy * view.dist, cz: view.tz - fz * view.dist, F: (H / 2) / Math.tan(FOV / 2) };
+  };
+  const project = (c, x, y, z) => {
+    const dx = x - c.cx, dy = y - c.cy, dz = z - c.cz, zc = dx * c.fx + dy * c.fy + dz * c.fz;
+    if (zc < 0.3) return null;
+    return [c.W / 2 + (dx * c.rx + dy * c.ry) * c.F / zc, c.H / 2 - (dx * c.ux + dy * c.uy + dz * c.uz) * c.F / zc];
+  };
+  const line = (c, P) => {
+    ctx.beginPath(); let pen = false;
+    for (const [x, y, z] of P) {
+      const q = project(c, x, y, z);
+      if (!q) { pen = false; continue; }
+      pen ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); pen = true;
+    }
+    ctx.stroke();
+  };
+  function render() {
+    st.pending = false;
+    const dpr = sizeCanvas(cv), W = cv.width, H = cv.height;
+    if (!W || !H) return;
+    if (!st.img || st.img.width !== W || st.img.height !== H) { st.img = ctx.createImageData(W, H); st.zb = new Float32Array(W * H); }
+    const px = new Uint32Array(st.img.data.buffer), zb = st.zb, pts = st.pts, pcol = st.pcol;
+    px.fill(0xff100c0a); zb.fill(Infinity);
+    const c = camera(W, H), size = Math.max(1, Math.round(1.5 * dpr)), half = size >> 1;
+    if (pts) {
+      const { fx, fy, fz, rx, ry, ux, uy, uz, cx, cy, cz, F } = c, W2 = W / 2, H2 = H / 2;
+      for (let i = 0; i < st.npts; i += step) {
+        const o = i * 3, x = pts[o], y = pts[o + 1], z = pts[o + 2];
+        if (x * x + y * y > 10000) continue;      // 100 m
+        const dx = x - cx, dy = y - cy, dz = z - cz, zc = dx * fx + dy * fy + dz * fz;
+        if (zc < 0.3) continue;
+        const k = F / zc, sx = (W2 + (dx * rx + dy * ry) * k) | 0, sy = (H2 - (dx * ux + dy * uy + dz * uz) * k) | 0;
+        if (sx < half || sy < half || sx >= W - size || sy >= H - size) continue;
+        const col = pcol[i];
+        for (let yy = sy - half, ye = yy + size; yy < ye; yy++) {
+          let p = yy * W + sx - half;
+          for (const e = p + size; p < e; p++) if (zc < zb[p]) { zb[p] = zc; px[p] = col; }
+        }
+      }
+    }
+    ctx.putImageData(st.img, 0, 0);
+    const g = st.groundZ;
+    ctx.lineWidth = dpr; ctx.strokeStyle = 'rgba(140,150,170,.25)';
+    ctx.fillStyle = 'rgba(140,150,170,.7)'; ctx.font = `${11 * dpr}px system-ui`;
+    for (let r = 10; r <= 50; r += 10) {          // rings on the ground every 10 m
+      const P = []; for (let a = 0; a <= 96; a++) { const t = a / 96 * 2 * Math.PI; P.push([r * Math.cos(t), r * Math.sin(t), g]); }
+      line(c, P);
+      const q = project(c, r, 0, g); if (q) ctx.fillText(r + 'm', q[0] + 3, q[1] - 3);
+    }
+    ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = 'rgba(255,255,255,.85)';   // ego footprint
+    line(c, [[2.3, 0.95, g], [2.3, -0.95, g], [-2.3, -0.95, g], [-2.3, 0.95, g], [2.3, 0.95, g]]);
+  }
+  function schedule() { if (!st.pending) { st.pending = true; requestAnimationFrame(render); } }
+  function set(xyz) {
+    st.pts = xyz; st.npts = Math.floor(xyz.length / 3);
+    const zs = [];                                // ground ~ 10th percentile of z within 25 m
+    for (let i = 0; i < st.npts; i += 13) { const o = i * 3; if (xyz[o] * xyz[o] + xyz[o + 1] * xyz[o + 1] < 625) zs.push(xyz[o + 2]); }
+    zs.sort((a, b) => a - b);
+    st.groundZ = zs.length ? zs[Math.floor(zs.length * 0.1)] : -1.9;
+    if (!st.pcol || st.pcol.length < st.npts) st.pcol = new Uint32Array(st.npts);
+    for (let i = 0; i < st.npts; i++) st.pcol[i] = LUT[Math.max(0, Math.min(255, ((xyz[i * 3 + 2] - st.groundZ + 0.3) / 4 * 255) | 0))];
+    schedule();
+  }
+  let drag = null;
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {                               // move the target along the ground, following the screen
+      const dpr = window.devicePixelRatio || 1, c = camera(cv.width, cv.height), s = view.dist / c.F * dpr;
+      let fx = c.ux, fy = c.uy; const fn = Math.hypot(fx, fy) || 1; fx /= fn; fy /= fn;
+      view.tx -= (c.rx * dx - fx * dy) * s; view.ty -= (c.ry * dx - fy * dy) * s;
+    } else {
+      view.yaw -= dx * 0.006;
+      view.pitch = Math.max(0.02, Math.min(Math.PI / 2 - 1e-4, view.pitch + dy * 0.006));
+    }
+    onViewChange();
+  });
+  cv.addEventListener('wheel', e => { e.preventDefault(); view.dist = Math.max(3, Math.min(300, view.dist * Math.exp(e.deltaY * 0.0012))); onViewChange(); }, { passive: false });
+  cv.addEventListener('dblclick', () => { Object.assign(view, VIEW0, { tz: st.groundZ }); onViewChange(); });
+  return { set, schedule, st };
+}
+const view = Object.assign({}, VIEW0);
+const mainLidar = makeLidarView($('lidar'), view, () => mainLidar.schedule());
+const setLidar = xyz => mainLidar.set(xyz), lschedule = () => mainLidar.schedule();
+
+function drawMap() {
+  const c = $('map'), dpr = sizeCanvas(c), W = c.width, H = c.height, g = c.getContext('2d'), sc = scenes[cur.si];
+  g.clearRect(0, 0, W, H);
+  if (!sc || !W || !H) return;
+  if (!bounds) {
+    bounds = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const s of scenes) for (const p of s.route) {
+      bounds[0] = Math.min(bounds[0], p[0]); bounds[1] = Math.max(bounds[1], p[0]);
+      bounds[2] = Math.min(bounds[2], p[1]); bounds[3] = Math.max(bounds[3], p[1]);
+    }
+  }
+  const [x0, x1, y0, y1] = bounds, pad = 16 * dpr;
+  const k = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad) / Math.max(1, y1 - y0));
+  const ox = (W - k * (x1 - x0)) / 2, oy = (H - k * (y1 - y0)) / 2;
+  const P = (x, y) => [ox + (x - x0) * k, H - oy - (y - y0) * k];
+  const line = (s, col, w) => {
+    if (!s.route.length) return;
+    g.strokeStyle = col; g.lineWidth = w * dpr; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
+    s.route.forEach((p, j) => { const [u, v] = P(p[0], p[1]); j ? g.lineTo(u, v) : g.moveTo(u, v); });
+    const [u, v] = P(s.route[0][0], s.route[0][1]); g.moveTo(u, v); g.lineTo(u + 0.01, v);   // a stop is a single point
+    g.stroke();
+  };
+  for (const s of scenes) if (s !== sc && s.log !== sc.log) line(s, '#343a45', 2);
+  for (const s of scenes) if (s !== sc && s.log === sc.log) line(s, '#5f6776', 2.5);
+  line(sc, 'rgba(78,161,255,.35)', 10);
+  line(sc, '#4ea1ff', 4);
+  if (lastEgo) {
+    const [u, v] = P(lastEgo.x, lastEgo.y);
+    g.fillStyle = '#ffd24a'; g.strokeStyle = '#0a0c10'; g.lineWidth = 2 * dpr;
+    g.beginPath(); g.arc(u, v, 5 * dpr, 0, 2 * Math.PI); g.fill(); g.stroke();
+  }
+  g.fillStyle = '#8a93a3'; g.font = `${11 * dpr}px system-ui`;
+  g.fillText('북 ↑ · 회색 = 다른 route · 파랑 = 이 scene · 노랑 = 지금 위치', 8 * dpr, H - 8 * dpr);
+}
+
+// ---------- frames (full rate) ----------
+const FRAMES = new Map();
+function framesOf(name, cam) {
+  const k = name + '|' + cam;
+  if (!FRAMES.has(k)) { const p = getJSON(`/api/frames/${name}?ch=${cam}`); FRAMES.set(k, p); p.catch(() => FRAMES.delete(k)); }
+  return FRAMES.get(k);
+}
+function pickIdx(fr, t0, t) {   // index of the frame nearest to t seconds after t0
+  const target = t0 + t * 1e6;
+  let lo = 0, hi = fr.ts.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (fr.ts[m] < target) lo = m + 1; else hi = m; }
+  if (lo > 0 && target - fr.ts[lo - 1] < fr.ts[lo] - target) lo--;
+  return lo;
+}
+const pick = (fr, t0, t) => fr.fn[pickIdx(fr, t0, t)];
+
+// ---------- playback (main view): real time, cameras at full rate, LiDAR 10 Hz on its own track ----------
+const PLAY = { on: false, base: 0, start: 0, t: 0, busy: false, key: -1 };
+const speedOf = () => +$('speed').value || 1;
+function togglePlay() { PLAY.on ? stopPlay() : startPlay(); }
+function stopPlay() { PLAY.on = false; $('play').textContent = '▶ 재생'; }
+function startPlay() {
+  const sc = scenes[cur.si];
+  if (!sc) return;
+  PLAY.base = cur.i >= sc.samples.length - 1 ? 0 : (sc.sample_ts[cur.i] - sc.sample_ts[0]) / 1e6;
+  PLAY.start = performance.now(); PLAY.t = PLAY.base; PLAY.key = cur.i; PLAY.on = true; LID.k = -1;
+  $('play').textContent = '❚❚ 멈춤';
+  requestAnimationFrame(playTick);
+}
+async function playTick() {
+  if (!PLAY.on) return;
+  const sc = scenes[cur.si], t0 = sc.sample_ts[0], dur = (sc.sample_ts[sc.sample_ts.length - 1] - t0) / 1e6;
+  const t = PLAY.t = Math.min(dur, PLAY.base + (performance.now() - PLAY.start) / 1000 * speedOf());
+  lidarFollow(sc, t0, t);                          // never holds the cameras back
+  if (!PLAY.busy) {
+    PLAY.busy = true;
+    try { await playFrame(sc, t0, t); } catch (e) {} finally { PLAY.busy = false; }
+  }
+  if (t >= dur) {
+    stopPlay();
+    if ($('autoNext').checked) playNextScene();
+    return;
+  }
+  requestAnimationFrame(playTick);
+}
+function lidarFollow(sc, t0, t) {   // every 10 Hz sweep, at most one load in flight, the next two read ahead
+  if (LID.busy) return;
+  LID.busy = true;
+  framesOf(sc.name, 'LIDAR_TOP').then(fr => {
+    const k = pickIdx(fr, t0, t);
+    for (const j of [k + 1, k + 2]) if (fr.fn[j]) lidBuf(fr.fn[j]).catch(() => {});
+    return k === LID.k ? null : lidBuf(fr.fn[k]).then(xyz => [k, xyz]);
+  }).then(r => { if (r && PLAY.on) { LID.k = r[0]; setLidar(r[1]); } })
+    .catch(() => {}).finally(() => { LID.busy = false; });
+}
+async function playFrame(sc, t0, t) {
+  const my = ++req;
+  const lists = await Promise.all(CAMS.map(c => framesOf(sc.name, c).catch(() => null)));
+  let i = 0;                                        // key frame at or before t (slider)
+  while (i + 1 < sc.sample_ts.length && sc.sample_ts[i + 1] <= t0 + t * 1e6) i++;
+  const ims = await Promise.all(lists.map(fr => loadImg(fr && pick(fr, t0, t))));
+  if (my !== req || !PLAY.on) return;
+  swapCams(ims);
+  if (i !== PLAY.key) {
+    PLAY.key = cur.i = i;
+    $('slider').value = i;
+    history.replaceState(null, '', `#scene=${sc.name}&i=${i}`);
+  }
+  $('time').textContent = t.toFixed(1) + ' s';
+  const r = sc.route;
+  if (r.length) {
+    let k = 0;
+    while (k + 1 < r.length && r[k + 1][2] <= t0 + t * 1e6) k++;
+    lastEgo = Object.assign({}, lastEgo, { x: r[k][0], y: r[k][1], speed_kmh: r[k][3] });
+    drawMap();
+    $('stat').textContent = `${new Date((t0 + t * 1e6) / 1000).toLocaleTimeString('ko-KR')} · 속도 ${r[k][3].toFixed(1)} km/h`;
+  }
+}
+async function playNextScene() {   // "이어서 재생": next scene of the list on the left, after the last one the first again
+  if (!order.length) return;
+  const j = order[(order.indexOf(cur.si) + 1) % order.length];
+  await go(j, 0);
+  if ($('autoNext').checked && !PLAY.on) startPlay();
+}
+function stepScene(d) {
+  const k = order.indexOf(cur.si), j = order[Math.max(0, Math.min(order.length - 1, k + d))];
+  if (j !== undefined && j !== cur.si) go(j, 0);
+}
+function setSpeed(v) {   // header and review share the speed
+  if (PLAY.on) { PLAY.base = PLAY.t; PLAY.start = performance.now(); }
+  if (REV.on) { REV.base = REV.t; REV.start = performance.now(); }
+  $('speed').value = $('revSpeed').value = v;
+  try { localStorage.setItem('simple.speed', v); } catch (e) {}
+}
+$('play').onclick = togglePlay;
+$('prevScene').onclick = () => stepScene(-1);
+$('nextScene').onclick = () => stepScene(1);
+$('slider').oninput = () => go(cur.si, +$('slider').value);
+$('speed').onchange = () => setSpeed($('speed').value);
+$('revSpeed').onchange = () => setSpeed($('revSpeed').value);
+try { $('autoNext').checked = (localStorage.getItem('simple.autoNext') ?? '1') === '1'; } catch (e) { $('autoNext').checked = true; }
+$('autoNext').onchange = () => { try { localStorage.setItem('simple.autoNext', $('autoNext').checked ? '1' : '0'); } catch (e) {} };
+try { const v = localStorage.getItem('simple.speed'); if (v) $('speed').value = $('revSpeed').value = v; } catch (e) {}
+
+// ---------- review: one group at a time, all members side by side, decided per scene ----------
+const REV = { gi: -1, names: [], imgs: [], lids: [], lidBusy: [], lidK: [], t: 0, on: false, base: 0, start: 0, req: 0 };
+const RVIEW = Object.assign({}, VIEW0);           // one LiDAR viewpoint for all tiles, so they compare like for like
+$('revCam').innerHTML = CAMS.map(c => `<option value="${c}"${c === 'CAM_FRONT' ? ' selected' : ''}>보기: 카메라 ${CAM_KO[c]}</option>`).join('')
+  + '<option value="LIDAR">보기: LiDAR 3D</option><option value="CAM_FRONT+LIDAR">보기: 앞 카메라 + LiDAR</option>';
+try { const v = localStorage.getItem('simple.revView'); if (v && [...$('revCam').options].some(o => o.value === v)) $('revCam').value = v; } catch (e) {}
+const revMode = () => { const v = $('revCam').value; return { cam: v === 'LIDAR' ? null : v.split('+')[0], lid: v.includes('LIDAR') }; };
+function applyRevMode() {
+  const m = revMode(), cls = m.cam && m.lid ? 'both' : m.lid ? 'lid' : 'cam';
+  $('revTiles').querySelectorAll('.body').forEach(b => { b.className = 'body ' + cls; });
+  REV.lidK = REV.names.map(() => -1);
+  if (m.lid) REV.lids.forEach(l => l.schedule());
+}
+function revLidar(k, n, t) {   // tile k: LiDAR sweep nearest to t, one load in flight per tile
+  if (REV.lidBusy[k]) return;
+  REV.lidBusy[k] = true;
+  const sc = scenes[byName[n]];
+  framesOf(n, 'LIDAR_TOP').then(fr => {
+    const j = pickIdx(fr, sc.sample_ts[0], t);
+    if (fr.fn[j + 1]) lidBuf(fr.fn[j + 1]).catch(() => {});
+    return j === REV.lidK[k] ? null : lidBuf(fr.fn[j]).then(xyz => [j, xyz]);
+  }).then(r => { if (r && REV.names[k] === n) { REV.lidK[k] = r[0]; REV.lids[k].set(r[1]); } })
+    .catch(() => {}).finally(() => { REV.lidBusy[k] = false; });
+}
+function openReview(gi, t = 0, autoplay = true) {
+  if (!GROUPS.length) return;
+  gi = ((gi % GROUPS.length) + GROUPS.length) % GROUPS.length;
+  if (PLAY.on) stopPlay();
+  if (REV.on) revToggle();
+  REV.gi = gi; REV.names = GROUPS[gi]; REV.t = t;
+  const N = REV.names.length, cols = N <= 2 ? N : N <= 4 ? 2 : Math.ceil(Math.sqrt(N));   // 2x2 keeps 16:9 frames large
+  $('revTiles').style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  const num = k => '①②③④⑤⑥⑦⑧⑨'[k] || k + 1;
+  $('revTiles').innerHTML = REV.names.map((n, k) => `<figure data-n="${n}"><figcaption>`
+    + `<b>${num(k)} ${n}</b><span class="rule-lab"></span><span class="muted">diff ${diffOf(n)}</span><span class="sp"></span>`
+    + `<span class="dec"><button data-dec="keep" data-n="${n}">남기기</button><button data-dec="drop" data-n="${n}">버리기</button></span>`
+    + `</figcaption><div class="body"><img alt=""><canvas title="드래그 = 회전 · 오른쪽 드래그 = 이동 · 휠 = 확대 · 더블클릭 = 처음 시점 (모든 칸 같이)"></canvas></div></figure>`).join('');
+  REV.imgs = [...$('revTiles').querySelectorAll('img')];
+  const redrawAll = () => REV.lids.forEach(l => l.schedule());
+  REV.lids = [...$('revTiles').querySelectorAll('canvas')].map(cv => makeLidarView(cv, RVIEW, redrawAll, N > 2 ? 2 : 1));
+  REV.lidBusy = REV.names.map(() => false);
+  applyRevMode();
+  $('revReason').textContent = ruleText(REV.names);
+  $('rev').hidden = false;
+  renderReviewState();
+  revShow();
+  if (autoplay) revToggle();
+}
+function renderReviewState() {
+  const done = GROUPS.filter(groupDone).length;
+  $('revTitle').textContent = `검토 ${REV.gi + 1} / ${GROUPS.length} · 완료 ${done}`;
+  $('revTiles').querySelectorAll('figure').forEach(f => {
+    const n = f.dataset.n, h = humanOf(n), fin = finalDrop(n) ? 'drop' : 'keep';
+    f.className = h ? fin : '';
+    f.querySelector('.rule-lab').innerHTML = ruleDrop(n) ? ' · <span class="del">규칙: 삭제 제안</span>' : ' · <span class="rep">규칙: 남김</span>';
+    f.querySelectorAll('.dec button').forEach(b => {
+      const on = b.dataset.dec === fin;
+      b.className = on ? `on ${fin}${h ? '' : ' auto'}` : '';
+      b.title = on && !h ? '규칙 제안 (아직 사람이 정하지 않음)' : on ? '사람이 정함 · 다시 누르면 취소' : '';
+    });
+  });
+  const g = GROUPS[REV.gi];
+  $('revDone').textContent = g && groupDone(g) ? '✓ 이 그룹 결정 완료' : '';
+}
+$('revTiles').addEventListener('click', e => {
+  const b = e.target.closest('[data-dec]');
+  if (!b) return;
+  const n = b.dataset.n, v = b.dataset.dec;
+  decide(n, humanOf(n) === v ? null : v);         // same button again = back to the rule's proposal
+});
+async function acceptRule() {   // undecided members take the rule's proposal, then the next open group
+  for (const n of REV.names) if (!humanOf(n)) await decide(n, ruleDrop(n) ? 'drop' : 'keep', 'rule');
+  const next = GROUPS.findIndex((g, k) => k > REV.gi && !groupDone(g));
+  const any = next >= 0 ? next : GROUPS.findIndex(g => !groupDone(g));
+  if (any >= 0 && any !== REV.gi) openReview(any);
+  else renderReviewState();
+}
+async function revShow() {   // camera tiles load + decode first, then change together; LiDAR follows on its own
+  const my = ++REV.req, m = revMode(), cam = m.cam, t = REV.t;
+  $('revSlider').value = t; $('revTime').textContent = t.toFixed(1) + ' s';
+  if (m.lid) REV.names.forEach((n, k) => revLidar(k, n, t));
+  if (!cam) return;
+  const lists = await Promise.all(REV.names.map(n => framesOf(n, cam).catch(() => null)));
+  if (my !== REV.req) return;
+  const fns = lists.map((fr, k) => fr && pick(fr, scenes[byName[REV.names[k]]].sample_ts[0], t));
+  const ims = await Promise.all(fns.map((fn, k) => fn && REV.imgs[k].dataset.fn !== fn ? loadImg(fn) : null));
+  if (my !== REV.req) return;
+  ims.forEach((im, k) => { if (im) { im.dataset.fn = fns[k]; REV.imgs[k].replaceWith(im); REV.imgs[k] = im; } });
+}
+function revToggle() {   // real time: the next frame is whatever time it is once the previous one is shown
+  if (REV.on) { REV.on = false; $('revPlay').textContent = '▶ 재생'; return; }
+  if (REV.t >= 20) REV.t = 0;
+  REV.on = true; REV.base = REV.t; REV.start = performance.now();
+  $('revPlay').textContent = '❚❚ 멈춤';
+  requestAnimationFrame(revTick);
+}
+async function revTick() {
+  if (!REV.on) return;
+  REV.t = Math.min(20, REV.base + (performance.now() - REV.start) / 1000 * speedOf());
+  await revShow();
+  if (REV.t >= 20) { REV.t = 0; REV.base = 0; REV.start = performance.now(); }   // loop the group until decided
+  requestAnimationFrame(revTick);
+}
+function closeReview() {
+  if (REV.on) revToggle();
+  $('rev').hidden = true;
+  const n = REV.names[0];
+  if (n !== undefined && byName[n] !== undefined && byName[n] !== cur.si) go(byName[n], 0);
+}
+$('revPlay').onclick = revToggle;
+$('revClose').onclick = closeReview;
+$('revPrev').onclick = () => openReview(REV.gi - 1);
+$('revNext').onclick = () => openReview(REV.gi + 1);
+$('revAccept').onclick = acceptRule;
+$('revSlider').oninput = () => { REV.t = +$('revSlider').value; REV.base = REV.t; REV.start = performance.now(); revShow(); };
+$('revCam').onchange = () => {
+  try { localStorage.setItem('simple.revView', $('revCam').value); } catch (e) {}
+  applyRevMode(); revShow();
+};
+
+// ---------- 삭제 확정: show the plan, then move the deleted scenes out and renumber (server: tools/apply_selection.py) ----------
+async function openApply() {
+  if (PLAY.on) stopPlay();
+  $('apply').hidden = false;
+  $('applyRun').hidden = false; $('applyRun').disabled = true;
+  $('applyCancel').disabled = false; $('applyCancel').textContent = '취소';
+  $('applyCancel').onclick = () => { $('apply').hidden = true; };
+  $('applyBody').textContent = '계획 불러오는 중…';
+  let p;
+  try { p = await getJSON('/api/apply/plan'); } catch (e) { $('applyBody').textContent = '계획을 불러오지 못함: ' + e.message; return; }
+  if (p.error) { $('applyBody').textContent = p.error; return; }
+  const rule = p.deleted.filter(n => p.by[n] !== 'human'), ren = Object.entries(p.rename);
+  $('applyBody').innerHTML =
+    `<div class="row"><b>scene ${p.n_before} → ${p.n_after}</b> · ${p.deleted.length}개를 데이터에서 뺍니다 (${(p.bytes_moved / 1e9).toFixed(1)} GB)</div>`
+    + `<div class="row">빼는 scene: ${p.deleted.map(n => `<b class="mono">${short(n)}</b> ${p.by[n] === 'human'
+        ? '<span class="muted">(사람 결정)</span>' : '<span class="del">(규칙 제안)</span>'}`).join(' · ')}</div>`
+    + (rule.length ? `<div class="row warn">⚠ 아직 사람이 보지 않은 규칙 제안 ${rule.length}개(${rule.map(short).join(', ')})도 그대로 빠집니다. 먼저 검토하는 것을 권장합니다.</div>` : '')
+    + `<div class="row">이름 당김 ${ren.length}개 (빈 번호 없이 앞으로 채움)<div class="names">${ren.map(([a, b]) => `${short(a)}→${short(b)}`).join('  ') || '없음'}</div></div>`
+    + `<div class="row muted">지우지 않고 <span class="mono">_removed/&lt;시각&gt;/</span> 폴더로 옮기고, 원래 표와 이름 대응표를 같이 저장해 되돌릴 수 있습니다. `
+    + `남는 scene에 대한 결정(예: 남기기)은 새 이름으로 따라가고, 규칙은 새 데이터로 다시 돌립니다. 모든 결정은 decisions_log.txt에 남습니다.</div>`;
+  $('applyRun').disabled = false;
+}
+async function runApply() {
+  $('applyRun').disabled = true; $('applyCancel').disabled = true;
+  $('applyBody').textContent = '적용 중… (파일 이동 · 이름 변경 · 규칙 다시 실행)';
+  let r;
+  try {
+    const res = await fetch('/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
+    r = res.ok ? await res.json() : { ok: false, error: 'HTTP ' + res.status };
+  } catch (e) { r = { ok: false, error: e.message }; }
+  $('applyCancel').disabled = false;
+  if (!r.ok) {
+    $('applyBody').innerHTML = `<div class="row warn">실패: ${esc(r.error || '')}</div><div class="row muted">${esc(r.hint || '')}</div>`;
+    return;
+  }
+  $('applyBody').innerHTML = `<div class="row"><b>완료</b> · 이제 scene ${r.n_after}개 · ${r.deleted.length}개를 백업으로 옮김</div>`
+    + `<div class="row muted">백업: <span class="mono">${esc(r.backup)}</span></div>`
+    + `<div class="row muted">되돌리기: <span class="mono">${esc(r.undo)}</span></div>`
+    + (r.curate_ok ? '' : '<div class="row warn">규칙 재실행 실패 — python tools/curate.py 를 직접 실행하세요</div>');
+  $('applyRun').hidden = true;
+  $('applyCancel').textContent = '새로고침';
+  $('applyCancel').onclick = () => { history.replaceState(null, '', '/'); location.reload(); };
+}
+$('applyRun').onclick = runApply;
+
+// ---------- keys ----------
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  if (!$('apply').hidden) { if (e.key === 'Escape' && !$('applyCancel').disabled) $('applyCancel').click(); return; }
+  if (!$('rev').hidden) {
+    if (e.key === 'Escape') closeReview();
+    else if (e.key === ' ') { e.preventDefault(); revToggle(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); openReview(REV.gi + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); openReview(REV.gi - 1); }
+    else if (e.key === 'a' || e.key === 'A') acceptRule();
+    return;
+  }
+  if (e.target === $('slider') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;   // the slider moves itself
+  if (e.key === 'ArrowRight') { e.preventDefault(); go(cur.si, cur.i + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur.si, cur.i - 1); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); stepScene(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); stepScene(-1); }
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+});
+let resizeT = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { drawMap(); lschedule(); }, 100);
+});
+
+// ---------- start ----------
+async function init() {
+  const [sc, se, hd] = await Promise.all([getJSON('/api/scenes'), getJSON('/api/selection').catch(() => ({ missing: true })),
+                                          getJSON('/api/decisions').catch(() => ({ decisions: {} }))]);
+  scenes = sc.scenes;
+  scenes.forEach((s, i) => { byName[s.name] = i; });
+  sel = se;
+  human = hd.decisions || {};
+  if (sel && !sel.missing) for (const r of sel.routes || []) for (const g of r.stage1_groups || []) for (const m of g) groupOf[m] = g;
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('view') === 'del' || h.get('view') === 'all') listView = h.get('view');
+  const saveView = listView;
+  listView = 'all'; buildList();                   // scene order for the review groups
+  buildGroups();
+  listView = saveView; buildList();
+  const si = byName[h.get('scene')] ?? order[0];
+  await go(si, +h.get('i') || 0);
+  if (h.get('play')) startPlay();
+  if (h.get('review') !== null && h.get('review') !== undefined && GROUPS.length) openReview(+h.get('review') || 0, +h.get('t') || 0, h.get('pause') === null);
+}
+init().catch(e => { $('title').textContent = '초기화 실패: ' + e.message; });
+</script>
+</body>
+</html>
